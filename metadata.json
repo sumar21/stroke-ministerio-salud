@@ -1,0 +1,5 @@
+{
+  "name": "DINESA Código ACV",
+  "description": "Prototipo funcional para el manejo de emergencias de ACV (Accidente Cerebrovascular) para el Ministerio de Salud.",
+  "requestFramePermissions": ["geolocation"]
+}
