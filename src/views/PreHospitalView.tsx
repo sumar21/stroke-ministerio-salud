@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/Card';
 import { Input, Textarea } from '../components/Input';
@@ -17,7 +17,7 @@ import { TimePicker } from '../components/ui/time-picker';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { geocodeAddress, reverseGeocode } from '../lib/googleMaps';
+import { geocodeAddress, reverseGeocode, getAddressSuggestions, PlaceSuggestion, geocodePlaceId } from '../lib/googleMaps';
 
 // Fix leaflet marker icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -64,9 +64,15 @@ const coverageOptions = [
 ];
 
 export function PreHospitalView({ onLogout, onSubmitCase, activeCase }: PreHospitalViewProps) {
+  const isMounted = useRef(true);
   const [isLocating, setIsLocating] = useState(true);
+  
+  // Estados de búsqueda
   const [searchAddress, setSearchAddress] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   const [formData, setFormData] = useState<PatientData>({
     id: '',
     name: '',
@@ -84,74 +90,131 @@ export function PreHospitalView({ onLogout, onSubmitCase, activeCase }: PreHospi
     }
   });
 
-  const getLocation = (highAccuracy = true) => {
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const getLocation = useCallback(async (highAccuracy = true) => {
     if (!navigator.geolocation) {
-      setIsLocating(false);
+      if (isMounted.current) setIsLocating(false);
       return;
     }
 
-    setIsLocating(true);
-    setFormData(prev => ({
-      ...prev,
-      location: {
-        ...prev.location,
-        address: 'Obteniendo ubicación...'
-      }
-    }));
+    if (isMounted.current) {
+      setIsLocating(true);
+      setFormData(prev => ({
+        ...prev,
+        location: { ...prev.location, address: 'Obteniendo ubicación...' }
+      }));
+    }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const address = await reverseGeocode(latitude, longitude);
-          
+    try {
+      const timeoutMs = highAccuracy ? 8000 : 5000;
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error(`Timeout: No se obtuvo respuesta en ${timeoutMs}ms.`));
+        }, timeoutMs);
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => { clearTimeout(timeoutId); resolve(pos); },
+          (err) => { clearTimeout(timeoutId); reject(err); },
+          { enableHighAccuracy: highAccuracy, maximumAge: 0 }
+        );
+      });
+
+      const { latitude, longitude } = position.coords;
+
+      try {
+        const address = await reverseGeocode(latitude, longitude);
+        if (isMounted.current) {
           setFormData(prev => ({
             ...prev,
-            location: {
-              lat: latitude,
-              lng: longitude,
-              address: address
-            }
+            location: { lat: latitude, lng: longitude, address: address }
           }));
           setSearchAddress(address);
-        } catch (error) {
+        }
+      } catch (geocodeError) {
+        if (isMounted.current) {
           setFormData(prev => ({
             ...prev,
-            location: {
-              ...prev.location,
-              lat: latitude,
-              lng: longitude,
-              address: 'Ubicación detectada (Sin conexión a mapas)'
-            }
+            location: { lat: latitude, lng: longitude, address: 'Ubicación detectada (Sin red para calle)' }
           }));
-        } finally {
+        }
+      }
+
+      if (isMounted.current) setIsLocating(false);
+
+    } catch (error: any) {
+      if (highAccuracy) {
+        if (isMounted.current) getLocation(false);
+      } else {
+        if (isMounted.current) {
+          setFormData(prev => ({
+            ...prev,
+            location: { ...prev.location, address: 'No se pudo obtener ubicación. Intente buscarla manualmente.' }
+          }));
           setIsLocating(false);
         }
-      },
-      (error) => {
-        console.warn("Error getting location:", error.message);
-        if (highAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
-          console.log("Retrying with low accuracy...");
-          getLocation(false);
-          return;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeCase) {
+      getLocation();
+    }
+  }, [activeCase, getLocation]);
+
+  // Efecto para buscar sugerencias mientras se escribe (debounce)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchAddress.length > 3 && !isSearching) {
+        // Pasamos lat y lng actuales para que priorice resultados cerca de Lanús
+        const results = await getAddressSuggestions(searchAddress, formData.location.lat, formData.location.lng);
+        if (isMounted.current) {
+          setSuggestions(results);
+          setShowSuggestions(results.length > 0);
         }
-        setFormData(prev => ({
-          ...prev,
-          location: {
-            ...prev.location,
-            address: 'No se pudo obtener la ubicación exacta. Verifique los permisos o intente buscar manualmente.'
-          }
-        }));
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 15000 : 10000, maximumAge: 0 }
-    );
+      } else {
+        if (isMounted.current) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchAddress, formData.location.lat, formData.location.lng, isSearching]);
+
+  const handleSelectSuggestion = async (suggestion: PlaceSuggestion) => {
+    setIsSearching(true);
+    setShowSuggestions(false);
+    setSearchAddress(suggestion.description);
+    
+    try {
+      const result = await geocodePlaceId(suggestion.placeId);
+      setFormData(prev => ({
+        ...prev,
+        location: {
+          lat: result.lat,
+          lng: result.lng,
+          address: result.formattedAddress
+        }
+      }));
+    } catch (error) {
+      alert("Error al obtener las coordenadas de la sugerencia seleccionada.");
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleManualSearch = async () => {
     if (!searchAddress.trim()) return;
-    
     setIsSearching(true);
+    setShowSuggestions(false);
+    
     try {
       const result = await geocodeAddress(searchAddress);
       setFormData(prev => ({
@@ -164,17 +227,11 @@ export function PreHospitalView({ onLogout, onSubmitCase, activeCase }: PreHospi
       }));
       setSearchAddress(result.formattedAddress);
     } catch (error) {
-      alert("No se pudo encontrar la dirección. Intente ser más específico (ej: 'Av. Corrientes 1234, CABA').");
+      alert("No se pudo encontrar la dirección exacta. Intente usar una de las sugerencias desplegables.");
     } finally {
       setIsSearching(false);
     }
   };
-
-  useEffect(() => {
-    if (!activeCase) {
-      getLocation();
-    }
-  }, [activeCase]);
 
   const handleSymptomToggle = (symptom: string) => {
     setFormData(prev => ({
@@ -419,14 +476,14 @@ export function PreHospitalView({ onLogout, onSubmitCase, activeCase }: PreHospi
                       ) : (
                         <MapPin className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
                       )}
-                      <div className="flex-1">
+                      <div className="flex-1 w-full min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <p className="text-sm font-semibold text-slate-700">Ubicación (Georreferenciación)</p>
                           <Button 
                             type="button" 
                             variant="ghost" 
                             size="sm" 
-                            className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900"
+                            className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900 shrink-0"
                             onClick={() => getLocation(true)}
                             disabled={isLocating}
                           >
@@ -435,27 +492,53 @@ export function PreHospitalView({ onLogout, onSubmitCase, activeCase }: PreHospi
                           </Button>
                         </div>
                         
-                        <div className="flex gap-2 mb-2">
-                          <Input 
-                            placeholder="Buscar dirección manualmente..." 
-                            value={searchAddress}
-                            onChange={(e) => setSearchAddress(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleManualSearch();
-                              }
-                            }}
-                            className="flex-1"
-                          />
-                          <Button 
-                            type="button" 
-                            variant="secondary" 
-                            onClick={handleManualSearch}
-                            disabled={isSearching || !searchAddress.trim()}
-                          >
-                            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                          </Button>
+                        <div className="relative w-full">
+                          <div className="flex gap-2 mb-2">
+                            <Input 
+                              placeholder="Buscar (Ej: Pinto 4457 Lanus)..." 
+                              value={searchAddress}
+                              onChange={(e) => {
+                                setSearchAddress(e.target.value);
+                                setShowSuggestions(true);
+                              }}
+                              onBlur={() => {
+                                // Pequeño retraso para permitir hacer click en la sugerencia antes de cerrarse
+                                setTimeout(() => setShowSuggestions(false), 200);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleManualSearch();
+                                }
+                              }}
+                              className="flex-1"
+                            />
+                            <Button 
+                              type="button" 
+                              variant="secondary" 
+                              onClick={handleManualSearch}
+                              disabled={isSearching || !searchAddress.trim()}
+                            >
+                              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            </Button>
+                          </div>
+
+                          {/* Menú desplegable de sugerencias */}
+                          {showSuggestions && suggestions.length > 0 && (
+                            <div className="absolute top-[42px] left-0 right-[52px] bg-white border border-slate-200 rounded-md shadow-lg z-[100] max-h-[200px] overflow-y-auto">
+                              {suggestions.map((item) => (
+                                <button
+                                  key={item.placeId}
+                                  type="button"
+                                  className="w-full text-left px-4 py-3 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-start gap-2 text-slate-700"
+                                  onClick={() => handleSelectSuggestion(item)}
+                                >
+                                  <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                  <span className="line-clamp-2">{item.description}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <p className="text-slate-600 text-sm mt-1 leading-relaxed">{formData.location.address}</p>
