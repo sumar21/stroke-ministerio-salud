@@ -72,7 +72,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
               </div>
               <div className="flex flex-col">
                 <span className="font-bold text-lg tracking-tight">Central DINESA</span>
-                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Coordinación Nacional</span>
+                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Coordinación Operativa</span>
               </div>
             </Button>
           </CardContent>

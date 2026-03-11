@@ -94,23 +94,43 @@ export default function App() {
   };
 
   const handleAssignHospital = (caseId: string, hospitalId: string) => {
+    // Fetch calls MUST be outside the setCases updater — React 18 StrictMode
+    // runs updater functions twice in development, which would send duplicate emails.
+    const currentCase = cases.find(c => c.id === caseId);
+    if (currentCase) {
+      const patientData = currentCase.patient;
+
+      if (currentCase.preAssignedHospitalId && currentCase.preAssignedHospitalId !== hospitalId) {
+        // Hospital changed: cancellation to old + assignment to new
+        fetch('/api/reassign-hospital', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId,
+            patientData,
+            cancelledHospitalId: currentCase.preAssignedHospitalId,
+            newHospitalId: hospitalId,
+            etaText: currentCase.etaText ?? null,
+          }),
+        }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
+      } else if (!currentCase.preAssignedHospitalId) {
+        // No pre-assignment: fresh confirmation email
+        fetch('/api/confirm-hospital', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId,
+            patientData,
+            confirmedHospitalId: hospitalId,
+            etaText: currentCase.etaText ?? null,
+          }),
+        }).catch(err => console.error('[EMAIL] Error al enviar correo de confirmación:', err));
+      }
+      // preAssignedHospitalId === hospitalId: confirmed same hospital, no email needed
+    }
+
     setCases(prev => prev.map(c => {
       if (c.id === caseId) {
-        // Check if it was pre-assigned and if the new assignment is different
-        if (c.preAssignedHospitalId && c.preAssignedHospitalId !== hospitalId) {
-          console.log(`[EMAIL] Enviando cancelación a hospital anterior (${c.preAssignedHospitalId})`);
-          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
-          
-          console.log(`[EMAIL] Enviando solicitud a nuevo hospital (${hospitalId})`);
-          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
-        } else if (c.preAssignedHospitalId === hospitalId) {
-          console.log(`[EMAIL] Confirmando asignación pre-existente para hospital (${hospitalId})`);
-          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
-        } else {
-          console.log(`[EMAIL] Enviando nueva solicitud a hospital (${hospitalId})`);
-          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
-        }
-
         return {
           ...c,
           status: 'ASSIGNED_EN_ROUTE',
@@ -121,6 +141,7 @@ export default function App() {
       return c;
     }));
   };
+
 
   if (!role) {
     return <LoginView onLogin={handleLogin} />;

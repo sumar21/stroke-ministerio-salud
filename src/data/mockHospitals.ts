@@ -29,7 +29,7 @@ export const mockHospitals: Hospital[] = [
     id: 'h4',
     name: 'Hospital General de Agudos Dr. Cosme Argerich',
     isStrokeCenter: true,
-    location: { lat: -34.632847, lng: -58.362489, address: 'Pi y Margall 750, C1155 CABA, Argentina' },
+    location: { lat: -34.628050, lng: -58.359612, address: 'Pi y Margall 750, C1155 CABA, Argentina' },
     distance: 5,
     email: 'stroke@hospitalargerich.org'
   },
@@ -45,7 +45,7 @@ export const mockHospitals: Hospital[] = [
     id: 'h6',
     name: 'Hospital General de Agudos J. M. Ramos Mejía',
     isStrokeCenter: true,
-    location: { lat: -34.614456, lng: -58.406912, address: 'Gral. Urquiza 609, C1221 CABA, Argentina' },
+    location: { lat: -34.615830, lng: -58.407250, address: 'Gral. Urquiza 609, C1221 CABA, Argentina' },
     distance: 6,
     email: 'guardia@hospitalramosmejia.org'
   },
@@ -61,7 +61,7 @@ export const mockHospitals: Hospital[] = [
     id: 'h8',
     name: 'Hospital General de Agudos Dr. Teodoro Álvarez',
     isStrokeCenter: false,
-    location: { lat: -34.624789, lng: -58.466123, address: 'Dr. Juan F. Aranguren 2701, C1406 CABA, Argentina' },
+    location: { lat: -34.625350, lng: -58.468050, address: 'Dr. Juan F. Aranguren 2701, C1406 CABA, Argentina' },
     distance: 10,
     email: 'contacto@hospitalalvarez.org'
   },
@@ -77,7 +77,7 @@ export const mockHospitals: Hospital[] = [
     id: 'h10',
     name: 'Hospital General de Agudos Donación Francisco Santojanni',
     isStrokeCenter: true,
-    location: { lat: -34.643345, lng: -58.514456, address: 'Pilar 950, C1408 CABA, Argentina' },
+    location: { lat: -34.648200, lng: -58.516430, address: 'Pilar 950, C1408 CABA, Argentina' },
     distance: 15,
     email: 'stroke@hospitalsantojanni.org'
   }

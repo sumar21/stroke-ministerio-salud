@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Hospital, PatientData } from '../types';
+import { Hospital } from '../types';
 import polyline from '@mapbox/polyline';
 
 // Fix for default marker icons in react-leaflet
@@ -48,24 +48,55 @@ interface MapComponentProps {
   routes?: Record<string, { encodedPolyline?: string }>;
 }
 
-function MapUpdater({ center }: { center: [number, number] }) {
+// Auto-fits the map to show the patient + the active/selected hospital
+function BoundsFitter({
+  patientLocation,
+  hospitals,
+  activeHospitalId,
+  routePositions,
+}: {
+  patientLocation: { lat: number; lng: number };
+  hospitals: Hospital[];
+  activeHospitalId?: string | null;
+  routePositions: [number, number][] | null;
+}) {
   const map = useMap();
+
   useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center, map]);
+    if (routePositions && routePositions.length > 1) {
+      // Fit to the route polyline
+      const bounds = L.latLngBounds(routePositions);
+      map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 14, duration: 0.8 });
+    } else if (activeHospitalId) {
+      // Fit just between patient and the active hospital
+      const activeHospital = hospitals.find(h => h.id === activeHospitalId);
+      if (activeHospital) {
+        const bounds = L.latLngBounds([
+          [patientLocation.lat, patientLocation.lng],
+          [activeHospital.location.lat, activeHospital.location.lng],
+        ]);
+        map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 14, duration: 0.8 });
+      }
+    } else {
+      // No hospital selected: center on patient
+      map.flyTo([patientLocation.lat, patientLocation.lng], 13, { duration: 0.8 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHospitalId, patientLocation.lat, patientLocation.lng]);
+
   return null;
 }
 
 export function MapComponent({ patientLocation, hospitals, assignedHospitalId, recommendedHospitalId, routes }: MapComponentProps) {
   const center: [number, number] = [patientLocation.lat, patientLocation.lng];
-  
-  const assignedHospital = hospitals.find(h => h.id === assignedHospitalId);
+
   const activeHospitalId = assignedHospitalId || recommendedHospitalId;
   const activeRoute = activeHospitalId && routes?.[activeHospitalId]?.encodedPolyline;
+  const assignedHospital = hospitals.find(h => h.id === assignedHospitalId);
 
-  const routePositions = activeRoute 
+  const routePositions: [number, number][] | null = activeRoute
     ? polyline.decode(activeRoute).map(p => [p[0], p[1]] as [number, number])
-    : assignedHospital 
+    : assignedHospital
       ? [
           [patientLocation.lat, patientLocation.lng] as [number, number],
           [assignedHospital.location.lat, assignedHospital.location.lng] as [number, number]
@@ -79,8 +110,14 @@ export function MapComponent({ patientLocation, hospitals, assignedHospitalId, r
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
-        <MapUpdater center={center} />
-        
+
+        <BoundsFitter
+          patientLocation={patientLocation}
+          hospitals={hospitals}
+          activeHospitalId={activeHospitalId}
+          routePositions={routePositions}
+        />
+
         {/* Patient / Ambulance Marker */}
         <Marker position={[patientLocation.lat, patientLocation.lng]} icon={ambulanceIcon}>
           <Popup>
@@ -89,14 +126,14 @@ export function MapComponent({ patientLocation, hospitals, assignedHospitalId, r
           </Popup>
         </Marker>
 
-        {/* Hospitals Markers */}
+        {/* Hospital Markers */}
         {hospitals.map(hospital => {
           const isAssigned = hospital.id === assignedHospitalId;
           const isRecommended = hospital.id === recommendedHospitalId;
           return (
-            <Marker 
-              key={hospital.id} 
-              position={[hospital.location.lat, hospital.location.lng]} 
+            <Marker
+              key={hospital.id}
+              position={[hospital.location.lat, hospital.location.lng]}
               icon={isAssigned || isRecommended ? assignedHospitalIcon : hospitalIcon}
             >
               <Popup>
@@ -108,11 +145,11 @@ export function MapComponent({ patientLocation, hospitals, assignedHospitalId, r
           );
         })}
 
-        {/* Route Line if assigned or recommended */}
+        {/* Route Line */}
         {routePositions && (
-          <Polyline 
-            positions={routePositions} 
-            color={assignedHospitalId ? "#10b981" : "#3b82f6"} 
+          <Polyline
+            positions={routePositions}
+            color={assignedHospitalId ? "#10b981" : "#3b82f6"}
             weight={4}
             dashArray={activeRoute ? undefined : "8, 8"}
             opacity={0.8}

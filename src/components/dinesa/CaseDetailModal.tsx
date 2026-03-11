@@ -36,16 +36,14 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: 
               routes[hospital.id] = metrics;
             }
           } 
-          // If pending or pre-assigned, calculate routes for all stroke centers
+          // If pending or pre-assigned, calculate routes for all hospitals
           else if (acvCase.status === 'PENDING_ASSIGNMENT' || acvCase.status === 'PRE_ASSIGNED') {
             const promises = mockHospitals.map(async (hospital) => {
-              if (hospital.isStrokeCenter) {
-                try {
-                  const metrics = await getRouteToHospital(acvCase.patient.location, hospital.location);
-                  routes[hospital.id] = metrics;
-                } catch (e) {
-                  console.error(`Failed to get route for ${hospital.name}`, e);
-                }
+              try {
+                const metrics = await getRouteToHospital(acvCase.patient.location, hospital.location);
+                routes[hospital.id] = metrics;
+              } catch (e) {
+                console.error(`Failed to get route for ${hospital.name}`, e);
               }
             });
             await Promise.all(promises);
@@ -78,22 +76,21 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: 
   }, [hospitalRoutes, acvCase.status]);
 
   const sortedHospitals = useMemo(() => {
-    return [...mockHospitals].sort((a, b) => {
-      if (a.id === recommendedHospitalId) return -1;
-      if (b.id === recommendedHospitalId) return 1;
-
-      if (a.isStrokeCenter && !b.isStrokeCenter) return -1;
-      if (!a.isStrokeCenter && b.isStrokeCenter) return 1;
-      
-      const metricsA = hospitalRoutes[a.id];
-      const metricsB = hospitalRoutes[b.id];
-      
-      if (metricsA && metricsB) {
-        return metricsA.totalDurationSeconds - metricsB.totalDurationSeconds;
-      }
-      
-      return (a.distance || 0) - (b.distance || 0);
-    });
+    return mockHospitals
+      .filter(h => h.isStrokeCenter)
+      .sort((a, b) => {
+        if (a.id === recommendedHospitalId) return -1;
+        if (b.id === recommendedHospitalId) return 1;
+        
+        const metricsA = hospitalRoutes[a.id];
+        const metricsB = hospitalRoutes[b.id];
+        
+        if (metricsA && metricsB) {
+          return metricsA.totalDurationSeconds - metricsB.totalDurationSeconds;
+        }
+        
+        return (a.distance || 0) - (b.distance || 0);
+      });
   }, [hospitalRoutes, recommendedHospitalId]);
 
   const formatDuration = (seconds: number) => {
@@ -173,7 +170,7 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: 
                 <div className="h-[350px] w-full rounded-3xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative">
                   <MapComponent 
                     patientLocation={acvCase.patient.location} 
-                    hospitals={mockHospitals}
+                    hospitals={mockHospitals.filter(h => h.isStrokeCenter)}
                     recommendedHospitalId={previewHospitalId || recommendedHospitalId}
                     assignedHospitalId={acvCase.assignedHospitalId}
                     routes={hospitalRoutes}
