@@ -4,6 +4,23 @@ import {
   EMAIL_FOOTER, getClosestHospitalByETA, buildPatientTableRows,
 } from './_shared.js';
 
+// Manual body parsing fallback
+async function parseBody(req: VercelRequest): Promise<any> {
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    return req.body;
+  }
+  // Fallback: read the raw stream
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); }
+      catch (e) { reject(new Error('Invalid JSON body')); }
+    });
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -12,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
-    const patientData = req.body;
+    const patientData = await parseBody(req);
     const strokeCenters = mockHospitals.filter(h => h.isStrokeCenter);
     const { hospital: closestHospital, etaText, etaSeconds } = await getClosestHospitalByETA(
       patientData.location.lat, patientData.location.lng, strokeCenters

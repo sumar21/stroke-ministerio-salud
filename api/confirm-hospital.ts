@@ -4,6 +4,16 @@ import {
   EMAIL_FOOTER, buildPatientTableRows,
 } from './_shared.js';
 
+async function parseBody(req: VercelRequest): Promise<any> {
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) return req.body;
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    req.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(new Error('Invalid JSON body')); } });
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -12,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
-    const { caseId, patientData, confirmedHospitalId, etaText } = req.body;
+    const { caseId, patientData, confirmedHospitalId, etaText } = await parseBody(req);
     const confirmed = mockHospitals.find(h => h.id === confirmedHospitalId);
     const hospitalName = confirmed?.name ?? 'Hospital desconocido';
     const hospitalAddress = confirmed?.location.address ?? 'Dirección no disponible';
