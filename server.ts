@@ -38,7 +38,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 async function getClosestHospitalByETA(patientLat: number, patientLng: number, hospitals: any[]) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  
+
   if (!apiKey) {
     console.warn("No Google Maps API key found (GOOGLE_MAPS_API_KEY), falling back to Haversine distance.");
     return getClosestHospitalByHaversine(patientLat, patientLng, hospitals);
@@ -46,16 +46,16 @@ async function getClosestHospitalByETA(patientLat: number, patientLng: number, h
 
   const origins = `${patientLat},${patientLng}`;
   const destinations = hospitals.map(h => `${h.location.lat},${h.location.lng}`).join('|');
-  
+
   try {
     const response = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origins}&destinations=${destinations}&key=${apiKey}`);
     const data = await response.json();
-    
+
     if (data.status === 'OK' && data.rows[0].elements) {
       const elements = data.rows[0].elements;
       let minDuration = Infinity;
       let closestIndex = -1;
-      
+
       elements.forEach((element: any, index: number) => {
         if (element.status === 'OK') {
           const durationSeconds = element.duration.value;
@@ -65,7 +65,7 @@ async function getClosestHospitalByETA(patientLat: number, patientLng: number, h
           }
         }
       });
-      
+
       if (closestIndex !== -1) {
         return {
           hospital: hospitals[closestIndex],
@@ -77,7 +77,7 @@ async function getClosestHospitalByETA(patientLat: number, patientLng: number, h
   } catch (error) {
     console.error("Error fetching Distance Matrix:", error);
   }
-  
+
   // Fallback if API fails
   return getClosestHospitalByHaversine(patientLat, patientLng, hospitals);
 }
@@ -108,10 +108,10 @@ function getClosestHospitalByHaversine(patientLat: number, patientLng: number, h
 
 app.post("/api/submit-acv", async (req, res) => {
   const patientData = req.body;
-  
+
   // 1. Pre-assignment logic: Find closest stroke center by ETA
   const strokeCenters = mockHospitals.filter(h => h.isStrokeCenter);
-  
+
   const { hospital: closestHospital, etaText, etaSeconds } = await getClosestHospitalByETA(
     patientData.location.lat,
     patientData.location.lng,
@@ -121,18 +121,26 @@ app.post("/api/submit-acv", async (req, res) => {
   const preAssignedHospital = closestHospital ? closestHospital.name : "Hospital Stroke Center (Default)";
   const preAssignedHospitalId = closestHospital ? closestHospital.id : null;
   const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
-  
+
   const status = "PRE_ASSIGNED";
-  
+
   // 2. Send emails
   // We send distinct emails (simulated with the same or different addresses for testing)
   // In a real scenario, these would be fetched from a database based on roles/hospital
+  /*
   const emails = [
     { role: "Centro Coordinador Nacional Stroke (DINESA)", email: "mazurmendi@msal.gov.ar", cc: "" },
     { role: "Centro Coordinador Prehospitalario (SAME)", email: "lgaggino@msal.gov.ar", cc: "" },
     { role: "Centro Stroke (Hospital Asignado)", email: "dmassaragian@msal.gov.ar", cc: "" }
   ];
   
+  */
+  const emails = [
+    { role: "Centro Coordinador Nacional Stroke (DINESA)", email: "santiago.bianucci@sumardigital.com.ar", cc: "rodrigo.rizzo@sumardigital.com.ar" },
+    { role: "Centro Coordinador Prehospitalario (SAME)", email: "santiago.bianucci@sumardigital.com.ar", cc: "rodrigo.rizzo@sumardigital.com.ar" },
+    { role: "Centro Stroke (Hospital Asignado)", email: "santiago.bianucci@sumardigital.com.ar", cc: "rodrigo.rizzo@sumardigital.com.ar" }
+  ];
+
   const emailContent = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-w-3xl; margin: 0 auto; color: #334155; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
       <div style="background-color: #ef4444; padding: 20px; color: white; text-align: center;">
@@ -192,7 +200,7 @@ app.post("/api/submit-acv", async (req, res) => {
       </div>
     </div>
   `;
-  
+
   try {
     for (const recipient of emails) {
       await transporter.sendMail({
@@ -203,7 +211,7 @@ app.post("/api/submit-acv", async (req, res) => {
         html: emailContent,
       });
     }
-    
+
     res.json({ success: true, status, preAssignedHospitalId, etaText, etaSeconds });
   } catch (error) {
     console.error("Error sending emails:", error);
