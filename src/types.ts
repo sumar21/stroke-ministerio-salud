@@ -5,7 +5,9 @@ export type Coverage = 'OBRA_SOCIAL' | 'PREPAGA' | 'PUBLICO' | 'SIN_COBERTURA';
 export type CaseStatus = 
   | 'DRAFT' 
   | 'PENDING_ASSIGNMENT' 
+  | 'PRE_ASSIGNED'
   | 'ASSIGNED_EN_ROUTE' 
+  | 'ARRIVED'
   | 'RECEIVED';
 
 export interface PatientData {
@@ -30,6 +32,8 @@ export interface AcvCase {
   createdAt: string;
   status: CaseStatus;
   patient: PatientData;
+  preAssignedHospitalId?: string;
+  etaText?: string;
   assignedHospitalId?: string;
   assignedAt?: string;
 }
@@ -44,4 +48,14 @@ export interface Hospital {
     address: string;
   };
   distance?: number; // mock distance for UI
+  email?: string;
+}
+
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  password?: string;
+  role: string;
 }

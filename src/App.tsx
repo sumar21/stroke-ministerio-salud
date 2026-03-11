@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Role, AcvCase, PatientData } from './types';
+import { Role, AcvCase, PatientData, CaseStatus } from './types';
 import { LoginView } from './views/LoginView';
 import { PreHospitalView } from './views/PreHospitalView';
 import { DinesaView } from './views/DinesaView';
@@ -37,7 +37,7 @@ const initialMockCases: AcvCase[] = [
       name: 'Marta Gómez',
       age: 72,
       sex: 'F',
-      coverage: 'PAMI',
+      coverage: 'OBRA_SOCIAL',
       symptomOnsetTime: '07:15',
       symptoms: ['Pérdida de fuerza en brazo izquierdo', 'Dificultad para hablar'],
       contactInfo: 'Vecino - 1123456789',
@@ -67,20 +67,50 @@ export default function App() {
     setActiveAmbulanceCaseId(null);
   };
 
-  const handleSubmitCase = (patientData: PatientData) => {
+  const handleSubmitCase = (patientData: PatientData, status: CaseStatus = 'PENDING_ASSIGNMENT', preAssignedHospitalId?: string, etaText?: string) => {
     const newCase: AcvCase = {
       id: `ACV-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
       createdAt: new Date().toISOString(),
-      status: 'PENDING_ASSIGNMENT',
+      status: status,
+      preAssignedHospitalId: preAssignedHospitalId,
+      etaText: etaText,
       patient: patientData
     };
     setCases(prev => [...prev, newCase]);
     setActiveAmbulanceCaseId(newCase.id);
   };
 
+  const handleArriveCase = (caseId: string) => {
+    setCases(prev => prev.map(c => {
+      if (c.id === caseId) {
+        return {
+          ...c,
+          status: 'ARRIVED',
+          assignedAt: new Date().toISOString() // Using assignedAt as arrival time for metrics
+        };
+      }
+      return c;
+    }));
+  };
+
   const handleAssignHospital = (caseId: string, hospitalId: string) => {
     setCases(prev => prev.map(c => {
       if (c.id === caseId) {
+        // Check if it was pre-assigned and if the new assignment is different
+        if (c.preAssignedHospitalId && c.preAssignedHospitalId !== hospitalId) {
+          console.log(`[EMAIL] Enviando cancelación a hospital anterior (${c.preAssignedHospitalId})`);
+          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
+          
+          console.log(`[EMAIL] Enviando solicitud a nuevo hospital (${hospitalId})`);
+          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
+        } else if (c.preAssignedHospitalId === hospitalId) {
+          console.log(`[EMAIL] Confirmando asignación pre-existente para hospital (${hospitalId})`);
+          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
+        } else {
+          console.log(`[EMAIL] Enviando nueva solicitud a hospital (${hospitalId})`);
+          console.log(`Destinatarios: santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar`);
+        }
+
         return {
           ...c,
           status: 'ASSIGNED_EN_ROUTE',
@@ -102,7 +132,10 @@ export default function App() {
       <PreHospitalView 
         onLogout={handleLogout} 
         onSubmitCase={handleSubmitCase}
+        onArriveCase={handleArriveCase}
         activeCase={activeCase}
+        cases={cases}
+        onClearActiveCase={() => setActiveAmbulanceCaseId(null)}
       />
     );
   }
