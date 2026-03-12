@@ -44,7 +44,7 @@ export function HomeMobile({ onLogout, onNewCase, onSelectCase, cases }: HomeMob
         </div>
 
         <div>
-          <h3 className="text-lg font-bold text-slate-900 mb-4 px-1">Casos Recientes</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-4 px-1">Casos en Curso</h3>
           <div className="space-y-3">
             {cases.length === 0 ? (
               <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200 border-dashed">

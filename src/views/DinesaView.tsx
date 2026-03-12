@@ -47,7 +47,12 @@ export function DinesaView({ onLogout, cases, onAssignHospital }: DinesaViewProp
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <img src={images.ministerioSalud} alt="Ministerio de Salud" className="h-10 object-contain" referrerPolicy="no-referrer" />
+          <img
+            src={images.ministerioSalud}
+            alt="Ministerio de Salud"
+            className="h-14 md:h-16 w-full object-contain object-left"
+            referrerPolicy="no-referrer"
+          />
           <Button variant="ghost" size="sm" className="md:hidden p-1" onClick={() => setIsMobileMenuOpen(false)}>
             <Menu className="w-5 h-5 text-slate-600" />
           </Button>
@@ -59,7 +64,10 @@ export function DinesaView({ onLogout, cases, onAssignHospital }: DinesaViewProp
               <Monitor className="w-5 h-5 text-red-600" />
               <h1 className="font-bold text-lg tracking-tight">Central DINESA</h1>
             </div>
-            <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-100 text-xs px-1.5 py-0.5">
+            <Badge
+              variant="secondary"
+              className="bg-red-50 text-red-700 border-red-200 text-xs font-semibold px-3 py-1 min-w-[78px] justify-center whitespace-nowrap"
+            >
               {activeCasesCount} Activos
             </Badge>
           </div>
