@@ -22,7 +22,7 @@ export function MonitorView({ cases, onAssignHospital, canAssign = true }: Monit
     <div className="flex-1 max-w-[1600px] mx-auto w-full p-4 md:p-6">
       <div className="mb-8 flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Monitor de Emergencias</h2>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Monitor de Stroke</h2>
           <p className="text-slate-500 mt-1">Gestión y derivación de pacientes con Código ACV activo.</p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export function MonitorView({ cases, onAssignHospital, canAssign = true }: Monit
                 <div className="w-20 h-20 mx-auto bg-slate-100 rounded-full flex items-center justify-center mb-6">
                   <CheckCircle2 className="w-10 h-10 text-slate-400" />
                 </div>
-                <p className="text-xl font-bold text-slate-900">No hay emergencias activas</p>
+                <p className="text-xl font-bold text-slate-900">No hay casos stroke activos</p>
                 <p className="mt-2">Todos los casos han sido derivados o resueltos.</p>
               </motion.div>
             ) : (

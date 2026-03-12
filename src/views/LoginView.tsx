@@ -46,63 +46,63 @@ export function LoginView({ onLogin }: LoginViewProps) {
               Sistema Nacional de Gestión y Derivación de Accidentes Cerebrovasculares
             </p>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4 px-8 pb-10">
+          <CardContent className="flex flex-col gap-4 px-5 md:px-8 pb-10">
             <Button 
               size="xl" 
-              className="w-full justify-start gap-4 text-left bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg shadow-red-600/20 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-red-600/30 group"
+              className="w-full justify-start gap-3 md:gap-4 text-left bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg shadow-red-600/20 rounded-2xl min-h-20 h-auto py-3 transition-all hover:scale-[1.02] hover:shadow-red-600/30 group"
               onClick={() => onLogin('AMBULANCE')}
             >
               <div className="bg-white/20 p-3 rounded-xl group-hover:bg-white/30 transition-colors">
                 <Ambulance className="w-7 h-7 text-white" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg tracking-tight">Prehospitalario</span>
-                <span className="text-sm font-medium text-red-100">Ambulancia / SAME</span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-base md:text-lg tracking-tight">Prehospitalario</span>
+                <span className="text-xs md:text-sm font-medium text-red-100">Ambulancia / SAME</span>
               </div>
             </Button>
             
             <Button 
               size="xl" 
               variant="outline"
-              className="w-full justify-start gap-4 text-left border-slate-200 hover:border-orange-200 hover:bg-orange-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-orange-100/50 group"
+              className="w-full justify-start gap-3 md:gap-4 text-left border-slate-200 hover:border-orange-200 hover:bg-orange-50 text-slate-700 rounded-2xl min-h-20 h-auto py-3 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-orange-100/50 group"
               onClick={() => onLogin('COORDINATION')}
             >
               <div className="bg-slate-100 p-3 rounded-xl text-slate-500 group-hover:bg-orange-100 group-hover:text-orange-700 transition-colors">
                 <Building2 className="w-7 h-7" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg tracking-tight">Coordinación Centro Stroke</span>
-                <span className="text-sm font-medium text-slate-500 group-hover:text-orange-700/70 transition-colors">Confirma y reasigna hospital</span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-base md:text-lg tracking-tight">Coordinación Stroke</span>
+                <span className="text-xs md:text-sm font-medium text-slate-500 group-hover:text-orange-700/70 transition-colors">Confirma y reasigna hospital</span>
               </div>
             </Button>
 
             <Button 
               size="xl" 
               variant="outline"
-              className="w-full justify-start gap-4 text-left border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-red-100/50 group"
+              className="w-full justify-start gap-3 md:gap-4 text-left border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-700 rounded-2xl min-h-20 h-auto py-3 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-red-100/50 group"
               onClick={() => onLogin('DINESA')}
             >
               <div className="bg-slate-100 p-3 rounded-xl text-slate-500 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
                 <Monitor className="w-7 h-7" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg tracking-tight">DINESA</span>
-                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Solo monitoreo de casos</span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-base md:text-lg tracking-tight">DINESA</span>
+                <span className="text-xs md:text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Solo monitoreo de casos</span>
               </div>
             </Button>
 
             <Button 
               size="xl" 
               variant="outline"
-              className="w-full justify-start gap-4 text-left border-slate-200 hover:border-blue-200 hover:bg-blue-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-blue-100/50 group"
+              className="w-full justify-start gap-3 md:gap-4 text-left border-slate-200 hover:border-blue-200 hover:bg-blue-50 text-slate-700 rounded-2xl min-h-20 h-auto py-3 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-blue-100/50 group"
               onClick={() => onLogin('ADMIN')}
             >
               <div className="bg-slate-100 p-3 rounded-xl text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
                 <ShieldCheck className="w-7 h-7" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg tracking-tight">Administrador</span>
-                <span className="text-sm font-medium text-slate-500 group-hover:text-blue-700/70 transition-colors">ABM de hospitales y usuarios</span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-base md:text-lg tracking-tight">Administrador</span>
+                <span className="text-xs md:text-sm font-medium text-slate-500 group-hover:text-blue-700/70 transition-colors">ABM de hospitales y usuarios</span>
               </div>
             </Button>
           </CardContent>

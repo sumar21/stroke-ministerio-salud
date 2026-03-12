@@ -129,7 +129,7 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital, ca
               <Activity className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Detalle de Emergencia</h2>
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Detalle de Stroke</h2>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="secondary" className="font-mono text-xs">
                   {acvCase.id}
