@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Role, AcvCase, PatientData, CaseStatus } from './types';
 import { LoginView } from './views/LoginView';
 import { PreHospitalView } from './views/PreHospitalView';
@@ -54,6 +54,7 @@ const initialMockCases: AcvCase[] = [
 export default function App() {
   const [role, setRole] = useState<Role>(null);
   const [cases, setCases] = useState<AcvCase[]>(initialMockCases);
+  const assignmentLocksRef = useRef<Set<string>>(new Set());
   
   // For the pre-hospital view, we track the active case they just created
   const [activeAmbulanceCaseId, setActiveAmbulanceCaseId] = useState<string | null>(null);
@@ -93,53 +94,88 @@ export default function App() {
     }));
   };
 
-  const handleAssignHospital = (caseId: string, hospitalId: string) => {
+  const handleAssignHospital = async (caseId: string, hospitalId: string): Promise<boolean> => {
+    const lockKey = `${caseId}:${hospitalId}`;
+    if (assignmentLocksRef.current.has(lockKey)) {
+      return true;
+    }
+    assignmentLocksRef.current.add(lockKey);
+
     // Fetch calls MUST be outside the setCases updater — React 18 StrictMode
     // runs updater functions twice in development, which would send duplicate emails.
     const currentCase = cases.find(c => c.id === caseId);
+    let emailRequestFailed = false;
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     if (currentCase) {
       const patientData = currentCase.patient;
 
       if (currentCase.preAssignedHospitalId && currentCase.preAssignedHospitalId !== hospitalId) {
         // Hospital changed: cancellation to old + assignment to new
-        fetch('/api/reassign-hospital', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            caseId,
-            patientData,
-            cancelledHospitalId: currentCase.preAssignedHospitalId,
-            newHospitalId: hospitalId,
-            etaText: currentCase.etaText ?? null,
-          }),
-        }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
+        try {
+          const response = await fetch('/api/reassign-hospital', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              caseId,
+              patientData,
+              cancelledHospitalId: currentCase.preAssignedHospitalId,
+              newHospitalId: hospitalId,
+              etaText: currentCase.etaText ?? null,
+              requestId,
+            }),
+          });
+          if (!response.ok) {
+            emailRequestFailed = true;
+            console.error('[EMAIL] Error HTTP en reasignación:', response.status);
+          }
+        } catch (err) {
+          emailRequestFailed = true;
+          console.error('[EMAIL] Error al enviar correos de reasignación:', err);
+        }
       } else if (!currentCase.preAssignedHospitalId) {
         // No pre-assignment: fresh confirmation email
-        fetch('/api/confirm-hospital', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            caseId,
-            patientData,
-            confirmedHospitalId: hospitalId,
-            etaText: currentCase.etaText ?? null,
-          }),
-        }).catch(err => console.error('[EMAIL] Error al enviar correo de confirmación:', err));
+        try {
+          const response = await fetch('/api/confirm-hospital', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              caseId,
+              patientData,
+              confirmedHospitalId: hospitalId,
+              etaText: currentCase.etaText ?? null,
+              requestId,
+            }),
+          });
+          if (!response.ok) {
+            emailRequestFailed = true;
+            console.error('[EMAIL] Error HTTP en confirmación:', response.status);
+          }
+        } catch (err) {
+          emailRequestFailed = true;
+          console.error('[EMAIL] Error al enviar correo de confirmación:', err);
+        }
       }
       // preAssignedHospitalId === hospitalId: confirmed same hospital, no email needed
     }
 
-    setCases(prev => prev.map(c => {
-      if (c.id === caseId) {
-        return {
-          ...c,
-          status: 'ASSIGNED_EN_ROUTE',
-          assignedHospitalId: hospitalId,
-          assignedAt: new Date().toISOString()
-        };
-      }
-      return c;
-    }));
+    try {
+      setCases(prev => prev.map(c => {
+        if (c.id === caseId) {
+          return {
+            ...c,
+            status: 'ASSIGNED_EN_ROUTE',
+            assignedHospitalId: hospitalId,
+            assignedAt: new Date().toISOString()
+          };
+        }
+        return c;
+      }));
+
+      return !emailRequestFailed;
+    } finally {
+      assignmentLocksRef.current.delete(lockKey);
+    }
   };
 
 

@@ -20,17 +20,72 @@ const hospitals: Hospital[] = [
 ];
 
 const RECIPIENTS = [
-  { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar, rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
 ];
 
+/*
+const RECIPIENTS = [
+  { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+];
+*/
 function patientRows(p: any) {
   const r = (l: string, v: string, c = '#0f172a') => `<tr><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:40%;color:#64748b;font-weight:500">${l}</td><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:${c}">${v}</td></tr>`;
   return [r('Nombre', p.name || 'N/A'), r('DNI', p.id || 'N/A'), r('Edad / Sexo', `${p.age || 'N/A'} / ${p.sex || 'N/A'}`), r('Cobertura', p.coverage || 'N/A'), r('Inicio de Síntomas', p.symptomOnsetTime || 'N/A', '#ef4444'), r('Contacto', p.contactInfo || 'N/A')].join('');
 }
 
 const FOOTER = `<div style="background:#f1f5f9;padding:16px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0">Mensaje automático – Sistema de Gestión de ACV</div>`;
+const processedReassignActions = new Map<string, number>();
+const IDEMPOTENCY_WINDOW_MS = 60_000;
+
+function parseEmails(value?: string) {
+  if (!value) return [] as string[];
+  return value
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+function getDistributionList() {
+  const toSet = new Set<string>();
+  const bccSet = new Set<string>();
+
+  for (const recipient of RECIPIENTS) {
+    if (recipient.email) toSet.add(recipient.email);
+    for (const bccEmail of parseEmails(recipient.bcc)) {
+      bccSet.add(bccEmail);
+    }
+  }
+
+  for (const toEmail of toSet) {
+    bccSet.delete(toEmail);
+  }
+
+  return {
+    to: Array.from(toSet).join(','),
+    bcc: Array.from(bccSet).join(','),
+  };
+}
+
+function isDuplicateAction(actionKey: string) {
+  const now = Date.now();
+  for (const [key, timestamp] of processedReassignActions.entries()) {
+    if (now - timestamp > IDEMPOTENCY_WINDOW_MS) {
+      processedReassignActions.delete(key);
+    }
+  }
+
+  const previous = processedReassignActions.get(actionKey);
+  if (previous && now - previous <= IDEMPOTENCY_WINDOW_MS) {
+    return true;
+  }
+
+  processedReassignActions.set(actionKey, now);
+  return false;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -41,7 +96,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { caseId, patientData, cancelledHospitalId, newHospitalId, etaText } = body;
+    const { caseId, patientData, cancelledHospitalId, newHospitalId, etaText, requestId } = body;
+    const actionKey = requestId || `${caseId}:${cancelledHospitalId}:${newHospitalId}:reassign`;
+
+    if (isDuplicateAction(actionKey)) {
+      return res.status(200).json({ success: true, duplicateIgnored: true });
+    }
 
     const cancelled = hospitals.find(h => h.id === cancelledHospitalId);
     const newH = hospitals.find(h => h.id === newHospitalId);
@@ -97,12 +157,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
-    for (const r of RECIPIENTS) {
-      await transport.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, bcc: r.bcc, subject: `[CANCELACIÓN] ACV ${caseId} – Cancelada: ${cancelledName}`, html: cancelHtml });
-    }
-    for (const r of RECIPIENTS) {
-      await transport.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, bcc: r.bcc, subject: `[DERIVACIÓN] ACV ${caseId} – En camino a ${newName}`, html: assignHtml });
-    }
+    const distribution = getDistributionList();
+
+    await transport.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      bcc: distribution.bcc || undefined,
+      subject: `[CANCELACIÓN] ACV ${caseId} – Cancelada: ${cancelledName}`,
+      html: cancelHtml,
+    });
+    await transport.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      bcc: distribution.bcc || undefined,
+      subject: `[DERIVACIÓN] ACV ${caseId} – En camino a ${newName}`,
+      html: assignHtml,
+    });
 
     return res.status(200).json({ success: true });
   } catch (err: any) {

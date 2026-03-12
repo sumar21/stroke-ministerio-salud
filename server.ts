@@ -95,6 +95,54 @@ const NOTIFICATION_RECIPIENTS = [
   { role: 'Centro Coordinador SAME', email: 'santiago.bianucci@sumardigital.com.ar', cc: 'rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Stroke', email: 'santiago.bianucci@sumardigital.com.ar', cc: 'rodrigo.rizzo@sumardigital.com.ar' },
 ];
+const processedActions = new Map<string, number>();
+const IDEMPOTENCY_WINDOW_MS = 60_000;
+
+function parseEmails(value?: string) {
+  if (!value) return [] as string[];
+  return value
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+function getDistributionList() {
+  const toSet = new Set<string>();
+  const ccSet = new Set<string>();
+
+  for (const recipient of NOTIFICATION_RECIPIENTS) {
+    if (recipient.email) toSet.add(recipient.email);
+    for (const ccEmail of parseEmails(recipient.cc)) {
+      ccSet.add(ccEmail);
+    }
+  }
+
+  for (const toEmail of toSet) {
+    ccSet.delete(toEmail);
+  }
+
+  return {
+    to: Array.from(toSet).join(','),
+    cc: Array.from(ccSet).join(','),
+  };
+}
+
+function isDuplicateAction(actionKey: string) {
+  const now = Date.now();
+  for (const [key, timestamp] of processedActions.entries()) {
+    if (now - timestamp > IDEMPOTENCY_WINDOW_MS) {
+      processedActions.delete(key);
+    }
+  }
+
+  const previous = processedActions.get(actionKey);
+  if (previous && now - previous <= IDEMPOTENCY_WINDOW_MS) {
+    return true;
+  }
+
+  processedActions.set(actionKey, now);
+  return false;
+}
 
 app.post("/api/submit-acv", async (req, res) => {
   const patientData = req.body;
@@ -123,9 +171,14 @@ app.post("/api/submit-acv", async (req, res) => {
     </div>`;
 
   try {
-    for (const r of NOTIFICATION_RECIPIENTS) {
-      await transporter.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, cc: r.cc, subject: `[${r.role}] Nuevo Código ACV - ${preAssignedHospital}`, html: emailContent });
-    }
+    const distribution = getDistributionList();
+    await transporter.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      cc: distribution.cc || undefined,
+      subject: `[ALERTA] Nuevo Código ACV - ${preAssignedHospital}`,
+      html: emailContent,
+    });
     res.json({ success: true, status: 'PRE_ASSIGNED', preAssignedHospitalId, etaText, etaSeconds });
   } catch (error) {
     console.error("Error sending emails:", error);
@@ -134,7 +187,12 @@ app.post("/api/submit-acv", async (req, res) => {
 });
 
 app.post('/api/confirm-hospital', async (req, res) => {
-  const { caseId, patientData, confirmedHospitalId, etaText } = req.body;
+  const { caseId, patientData, confirmedHospitalId, etaText, requestId } = req.body;
+  const actionKey = requestId || `${caseId}:${confirmedHospitalId}:confirm`;
+  if (isDuplicateAction(actionKey)) {
+    return res.json({ success: true, duplicateIgnored: true });
+  }
+
   const confirmed = mockHospitals.find(h => h.id === confirmedHospitalId);
   const hospitalName = confirmed?.name ?? 'Hospital desconocido';
   const hospitalAddress = confirmed?.location.address ?? 'Dirección no disponible';
@@ -163,9 +221,14 @@ app.post('/api/confirm-hospital', async (req, res) => {
     </div>`;
 
   try {
-    for (const r of NOTIFICATION_RECIPIENTS) {
-      await transporter.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, cc: r.cc, subject: `[CONFIRMACIÓN] Código ACV ${caseId} – Derivación confirmada: ${hospitalName}`, html });
-    }
+    const distribution = getDistributionList();
+    await transporter.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      cc: distribution.cc || undefined,
+      subject: `[CONFIRMACIÓN] Código ACV ${caseId} – Derivación confirmada: ${hospitalName}`,
+      html,
+    });
     res.json({ success: true });
   } catch (error) {
     console.error('Error sending confirmation email:', error);
@@ -174,7 +237,12 @@ app.post('/api/confirm-hospital', async (req, res) => {
 });
 
 app.post('/api/reassign-hospital', async (req, res) => {
-  const { caseId, patientData, cancelledHospitalId, newHospitalId, etaText } = req.body;
+  const { caseId, patientData, cancelledHospitalId, newHospitalId, etaText, requestId } = req.body;
+  const actionKey = requestId || `${caseId}:${cancelledHospitalId}:${newHospitalId}:reassign`;
+  if (isDuplicateAction(actionKey)) {
+    return res.json({ success: true, duplicateIgnored: true });
+  }
+
   const cancelledHospital = mockHospitals.find(h => h.id === cancelledHospitalId);
   const newHospital = mockHospitals.find(h => h.id === newHospitalId);
   const cancelledName = cancelledHospital?.name ?? 'Hospital anterior';
@@ -229,12 +297,21 @@ app.post('/api/reassign-hospital', async (req, res) => {
     </div>`;
 
   try {
-    for (const r of NOTIFICATION_RECIPIENTS) {
-      await transporter.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, cc: r.cc, subject: `[CANCELACIÓN] Código ACV ${caseId} – Derivación cancelada para ${cancelledName}`, html: cancellationHtml });
-    }
-    for (const r of NOTIFICATION_RECIPIENTS) {
-      await transporter.sendMail({ from: '"Sistema ACV" <no-reply@sumardigital.com.ar>', to: r.email, cc: r.cc, subject: `[DERIVACIÓN] Código ACV ${caseId} – Paciente en camino a ${newHospitalName}`, html: newAssignmentHtml });
-    }
+    const distribution = getDistributionList();
+    await transporter.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      cc: distribution.cc || undefined,
+      subject: `[CANCELACIÓN] Código ACV ${caseId} – Derivación cancelada para ${cancelledName}`,
+      html: cancellationHtml,
+    });
+    await transporter.sendMail({
+      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+      to: distribution.to,
+      cc: distribution.cc || undefined,
+      subject: `[DERIVACIÓN] Código ACV ${caseId} – Paciente en camino a ${newHospitalName}`,
+      html: newAssignmentHtml,
+    });
     res.json({ success: true });
   } catch (error) {
     console.error('Error sending reassignment emails:', error);

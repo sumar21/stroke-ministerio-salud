@@ -23,19 +23,20 @@ const hospitals: Hospital[] = [
   { id: 'h10', name: 'Hospital Gral. de Agudos Donación Francisco Santojanni', isStrokeCenter: true, location: { lat: -34.648200, lng: -58.516430, address: 'Pilar 950, CABA' } },
 ];
 
-/*
-const RECIPIENTS = [
-  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', cc:'rodrigo.rizzo@sumardigital.com.ar' },
-  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', cc:'rodrigo.rizzo@sumardigital.com.ar' },
-  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar', cc:'rodrigo.rizzo@sumardigital.com.ar' },
-];
-*/
 
+const RECIPIENTS = [
+  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+];
+
+/*
 const RECIPIENTS = [
   { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
+*/
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;

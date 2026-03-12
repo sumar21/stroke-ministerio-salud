@@ -13,7 +13,7 @@ interface DinesaViewProps {
   mode?: 'COORDINATION' | 'DINESA' | 'ADMIN';
   onLogout: () => void;
   cases: AcvCase[];
-  onAssignHospital: (caseId: string, hospitalId: string) => void;
+  onAssignHospital: (caseId: string, hospitalId: string) => Promise<boolean>;
 }
 
 type ViewState = 'MONITOR' | 'DASHBOARD' | 'HOSPITALS' | 'USERS';

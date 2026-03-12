@@ -12,7 +12,7 @@ interface CaseDetailModalProps {
   acvCase: AcvCase;
   isOpen: boolean;
   onClose: () => void;
-  onAssignHospital: (caseId: string, hospitalId: string) => void;
+  onAssignHospital: (caseId: string, hospitalId: string) => Promise<boolean>;
   canAssign?: boolean;
 }
 
@@ -20,6 +20,7 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital, ca
   const [hospitalRoutes, setHospitalRoutes] = useState<Record<string, RouteMetrics>>({});
   const [isCalculatingRoutes, setIsCalculatingRoutes] = useState(false);
   const [previewHospitalId, setPreviewHospitalId] = useState<string | null>(null);
+  const [isAssigningHospitalId, setIsAssigningHospitalId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -366,12 +367,24 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital, ca
                                 size="sm" 
                                 variant={isRecommended ? 'primary' : 'outline'}
                                 className={`shrink-0 px-6 rounded-xl ${isRecommended ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-                                onClick={() => {
-                                  onAssignHospital(acvCase.id, hospital.id);
-                                  onClose();
+                                disabled={!!isAssigningHospitalId}
+                                onClick={async () => {
+                                  setIsAssigningHospitalId(hospital.id);
+                                  const success = await onAssignHospital(acvCase.id, hospital.id);
+                                  setIsAssigningHospitalId(null);
+
+                                  if (success) {
+                                    onClose();
+                                  } else {
+                                    alert('No se pudieron enviar los correos. Verifique e intente nuevamente.');
+                                  }
                                 }}
                               >
-                                {isPreAssigned ? 'Confirmar' : 'Asignar'}
+                                {isAssigningHospitalId === hospital.id
+                                  ? 'Enviando...'
+                                  : isPreAssigned
+                                    ? 'Confirmar'
+                                    : 'Asignar'}
                               </Button>
                             )}
                           </div>
