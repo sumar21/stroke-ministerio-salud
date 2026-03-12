@@ -19,19 +19,20 @@ const hospitals: Hospital[] = [
   { id: 'h10', name: 'Hospital Gral. de Agudos Donación Francisco Santojanni', isStrokeCenter: true, location: { lat: -34.648200, lng: -58.516430, address: 'Pilar 950, CABA' } },
 ];
 
+/*
 const RECIPIENTS = [
   { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
   { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
   { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
 ];
+*/
 
-/*
 const RECIPIENTS = [
   { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
-*/
+
 function patientRows(p: any) {
   const r = (l: string, v: string, c = '#0f172a') => `<tr><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:40%;color:#64748b;font-weight:500">${l}</td><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:${c}">${v}</td></tr>`;
   return [r('Nombre', p.name || 'N/A'), r('DNI', p.id || 'N/A'), r('Edad / Sexo', `${p.age || 'N/A'} / ${p.sex || 'N/A'}`), r('Cobertura', p.coverage || 'N/A'), r('Inicio de Síntomas', p.symptomOnsetTime || 'N/A', '#ef4444'), r('Contacto', p.contactInfo || 'N/A')].join('');
