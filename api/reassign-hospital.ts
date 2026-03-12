@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <div style="padding:24px;background:#f8fafc">
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:14px 18px;margin-bottom:20px">
             <p style="margin:0;color:#92400e;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-            <p style="margin:6px 0 0;color:#b45309;font-size:13px">Derivación a <strong>${cancelledName}</strong> cancelada por DINESA. Paciente redirigido.</p>
+            <p style="margin:6px 0 0;color:#b45309;font-size:13px">Derivación a <strong>${cancelledName}</strong> cancelada por Coordinación del Centro Stroke. Paciente redirigido.</p>
           </div>
           <h2 style="margin-top:0;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
           <table style="width:100%;border-collapse:collapse;margin-top:12px">${patientRows(patientData || {})}</table>
@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <div style="padding:24px;background:#f8fafc">
           <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:14px 18px;margin-bottom:20px">
             <p style="margin:0;color:#7f1d1d;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-            <p style="margin:6px 0 0;color:#991b1b;font-size:13px">DINESA ha derivado un paciente con <strong>Código ACV</strong>. Activar equipo de stroke.</p>
+            <p style="margin:6px 0 0;color:#991b1b;font-size:13px">Coordinación del Centro Stroke ha derivado un paciente con <strong>Código ACV</strong>. Activar equipo de stroke.</p>
           </div>
           <h2 style="margin-top:0;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
           <table style="width:100%;border-collapse:collapse;margin-top:12px">${patientRows(patientData || {})}</table>

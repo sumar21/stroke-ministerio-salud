@@ -145,7 +145,9 @@ export function UsersView() {
                 onChange={e => setCurrentUser({...currentUser!, role: e.target.value as any})}
               >
                 <option value="AMBULANCE">Ambulancia (Carga)</option>
-                <option value="DINESA">DINESA (Gestión)</option>
+                <option value="COORDINATION">Coordinación Centro Stroke</option>
+                <option value="DINESA">DINESA (Monitor)</option>
+                <option value="ADMIN">Administrador</option>
                 <option value="HOSPITAL">Hospital (Recepción)</option>
               </select>
             </div>

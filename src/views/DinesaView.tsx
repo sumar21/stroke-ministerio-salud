@@ -10,6 +10,7 @@ import { HospitalsView } from './dinesa/HospitalsView';
 import { UsersView } from './dinesa/UsersView';
 
 interface DinesaViewProps {
+  mode?: 'COORDINATION' | 'DINESA' | 'ADMIN';
   onLogout: () => void;
   cases: AcvCase[];
   onAssignHospital: (caseId: string, hospitalId: string) => void;
@@ -17,9 +18,11 @@ interface DinesaViewProps {
 
 type ViewState = 'MONITOR' | 'DASHBOARD' | 'HOSPITALS' | 'USERS';
 
-export function DinesaView({ onLogout, cases, onAssignHospital }: DinesaViewProps) {
-  const [currentView, setCurrentView] = useState<ViewState>('MONITOR');
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
+export function DinesaView({ mode = 'COORDINATION', onLogout, cases, onAssignHospital }: DinesaViewProps) {
+  const isAdminMode = mode === 'ADMIN';
+  const isMonitorOnlyMode = mode === 'DINESA';
+  const [currentView, setCurrentView] = useState<ViewState>(isAdminMode ? 'HOSPITALS' : 'MONITOR');
+  const [isConfigOpen, setIsConfigOpen] = useState(isAdminMode);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const activeCasesCount = cases.filter(c => ['PENDING_ASSIGNMENT', 'PRE_ASSIGNED', 'ASSIGNED_EN_ROUTE'].includes(c.status)).length;
@@ -62,66 +65,78 @@ export function DinesaView({ onLogout, cases, onAssignHospital }: DinesaViewProp
           <div className="flex items-center justify-between mb-6 px-2">
             <div className="flex items-center gap-2 text-slate-800">
               <Monitor className="w-5 h-5 text-red-600" />
-              <h1 className="font-bold text-lg tracking-tight">Central DINESA</h1>
+              <h1 className="font-bold text-lg tracking-tight">
+                {isAdminMode ? 'Administrador' : isMonitorOnlyMode ? 'DINESA (Monitor)' : 'Coordinación Centro Stroke'}
+              </h1>
             </div>
-            <Badge
-              variant="secondary"
-              className="bg-red-50 text-red-700 border-red-200 text-xs font-semibold px-3 py-1 min-w-[78px] justify-center whitespace-nowrap"
-            >
-              {activeCasesCount} Activos
-            </Badge>
-          </div>
-
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2">Menú Principal</p>
-          <nav className="space-y-1 mb-8">
-            <button 
-              onClick={() => handleNavClick('MONITOR')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${currentView === 'MONITOR' ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-              <Monitor className="w-5 h-5" />
-              Monitor de Emergencias
-            </button>
-            <button 
-              onClick={() => handleNavClick('DASHBOARD')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${currentView === 'DASHBOARD' ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              Dashboard
-            </button>
-          </nav>
-
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2">Administración</p>
-          <div className="space-y-1">
-            <button 
-              onClick={() => setIsConfigOpen(!isConfigOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Settings className="w-5 h-5" />
-                Configuración
-              </div>
-              {isConfigOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-            
-            {isConfigOpen && (
-              <div className="pl-11 pr-3 py-1 space-y-1">
-                <button 
-                  onClick={() => handleNavClick('HOSPITALS')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${currentView === 'HOSPITALS' ? 'text-red-700 bg-red-50 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
-                >
-                  <Hospital className="w-4 h-4" />
-                  Hospitales
-                </button>
-                <button 
-                  onClick={() => handleNavClick('USERS')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${currentView === 'USERS' ? 'text-red-700 bg-red-50 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
-                >
-                  <Users className="w-4 h-4" />
-                  Usuarios
-                </button>
-              </div>
+            {!isAdminMode && (
+              <Badge
+                variant="secondary"
+                className="bg-red-50 text-red-700 border-red-200 text-xs font-semibold px-3 py-1 min-w-[78px] justify-center whitespace-nowrap"
+              >
+                {activeCasesCount} Activos
+              </Badge>
             )}
           </div>
+
+          {!isAdminMode ? (
+            <>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2">Menú Principal</p>
+              <nav className="space-y-1 mb-8">
+                <button 
+                  onClick={() => handleNavClick('MONITOR')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${currentView === 'MONITOR' ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                >
+                  <Monitor className="w-5 h-5" />
+                  Monitor de Emergencias
+                </button>
+                {isMonitorOnlyMode && (
+                  <button 
+                    onClick={() => handleNavClick('DASHBOARD')}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${currentView === 'DASHBOARD' ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    Dashboard
+                  </button>
+                )}
+              </nav>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2">Administración</p>
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setIsConfigOpen(!isConfigOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-5 h-5" />
+                    Configuración
+                  </div>
+                  {isConfigOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+                
+                {isConfigOpen && (
+                  <div className="pl-11 pr-3 py-1 space-y-1">
+                    <button 
+                      onClick={() => handleNavClick('HOSPITALS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${currentView === 'HOSPITALS' ? 'text-red-700 bg-red-50 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                    >
+                      <Hospital className="w-4 h-4" />
+                      Hospitales
+                    </button>
+                    <button 
+                      onClick={() => handleNavClick('USERS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${currentView === 'USERS' ? 'text-red-700 bg-red-50 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                    >
+                      <Users className="w-4 h-4" />
+                      Usuarios
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="p-4 border-t border-slate-100">
@@ -141,14 +156,22 @@ export function DinesaView({ onLogout, cases, onAssignHospital }: DinesaViewProp
           </Button>
           <div className="flex items-center gap-2 text-slate-800">
             <Monitor className="w-5 h-5 text-red-600" />
-            <h1 className="font-bold text-lg tracking-tight">DINESA</h1>
+            <h1 className="font-bold text-lg tracking-tight">
+              {isAdminMode ? 'Administrador' : isMonitorOnlyMode ? 'DINESA' : 'Coordinación'}
+            </h1>
           </div>
         </div>
 
-        {currentView === 'MONITOR' && <MonitorView cases={cases} onAssignHospital={onAssignHospital} />}
-        {currentView === 'DASHBOARD' && <DashboardView cases={cases} />}
-        {currentView === 'HOSPITALS' && <HospitalsView />}
-        {currentView === 'USERS' && <UsersView />}
+        {!isAdminMode && currentView === 'MONITOR' && (
+          <MonitorView
+            cases={cases}
+            onAssignHospital={onAssignHospital}
+            canAssign={!isMonitorOnlyMode}
+          />
+        )}
+        {!isAdminMode && isMonitorOnlyMode && currentView === 'DASHBOARD' && <DashboardView cases={cases} />}
+        {isAdminMode && currentView === 'HOSPITALS' && <HospitalsView />}
+        {isAdminMode && currentView === 'USERS' && <UsersView />}
       </main>
     </div>
   );

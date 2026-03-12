@@ -79,7 +79,7 @@ export function CaseDetail({ caseData, onBack, onArrive }: CaseDetailProps) {
                       <div>
                         <h2 className="text-xl font-bold text-slate-900">Pre Asignado</h2>
                         <p className="text-slate-600 mt-1">
-                          El sistema ha sugerido un destino. Aguardando confirmación final de DINESA.
+                          El sistema ha sugerido un destino. Aguardando confirmación final de Coordinación del Centro Stroke.
                         </p>
                         <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200 text-left w-full space-y-4">
                           <div>

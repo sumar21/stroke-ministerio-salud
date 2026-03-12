@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <div style="padding:24px;background:#f8fafc">
           <div style="background:#d1fae5;border:1px solid #a7f3d0;border-radius:6px;padding:14px 18px;margin-bottom:20px">
             <p style="margin:0;color:#065f46;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-            <p style="margin:6px 0 0;color:#047857;font-size:13px">DINESA ha confirmado la derivación a <strong>${hospitalName}</strong>. Activar equipo de stroke.</p>
+            <p style="margin:6px 0 0;color:#047857;font-size:13px">Coordinación del Centro Stroke ha confirmado la derivación a <strong>${hospitalName}</strong>. Activar equipo de stroke.</p>
           </div>
           <h2 style="margin-top:0;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
           <table style="width:100%;border-collapse:collapse;margin-top:12px">${patientRows(patientData || {})}</table>

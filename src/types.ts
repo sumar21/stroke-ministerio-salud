@@ -1,4 +1,4 @@
-export type Role = 'AMBULANCE' | 'DINESA' | null;
+export type Role = 'AMBULANCE' | 'COORDINATION' | 'DINESA' | 'ADMIN' | null;
 
 export type Coverage = 'OBRA_SOCIAL' | 'PREPAGA' | 'PUBLICO' | 'SIN_COBERTURA';
 

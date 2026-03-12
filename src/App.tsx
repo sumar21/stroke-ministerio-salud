@@ -161,9 +161,32 @@ export default function App() {
     );
   }
 
-  if (role === 'DINESA') {
+  if (role === 'COORDINATION') {
     return (
       <DinesaView 
+        mode="COORDINATION"
+        onLogout={handleLogout}
+        cases={cases}
+        onAssignHospital={handleAssignHospital}
+      />
+    );
+  }
+
+  if (role === 'DINESA') {
+    return (
+      <DinesaView
+        mode="DINESA"
+        onLogout={handleLogout}
+        cases={cases}
+        onAssignHospital={handleAssignHospital}
+      />
+    );
+  }
+
+  if (role === 'ADMIN') {
+    return (
+      <DinesaView
+        mode="ADMIN"
         onLogout={handleLogout}
         cases={cases}
         onAssignHospital={handleAssignHospital}

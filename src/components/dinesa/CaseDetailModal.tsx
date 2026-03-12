@@ -13,9 +13,10 @@ interface CaseDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAssignHospital: (caseId: string, hospitalId: string) => void;
+  canAssign?: boolean;
 }
 
-export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: CaseDetailModalProps) {
+export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital, canAssign = true }: CaseDetailModalProps) {
   const [hospitalRoutes, setHospitalRoutes] = useState<Record<string, RouteMetrics>>({});
   const [isCalculatingRoutes, setIsCalculatingRoutes] = useState(false);
   const [previewHospitalId, setPreviewHospitalId] = useState<string | null>(null);
@@ -300,7 +301,11 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: 
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm text-slate-500 mb-4">Seleccione el destino óptimo basado en distancia y capacidad.</p>
+                    <p className="text-sm text-slate-500 mb-4">
+                      {canAssign
+                        ? 'Seleccione el destino óptimo basado en distancia y capacidad.'
+                        : 'Vista de monitoreo: sin acciones de confirmación o reasignación.'}
+                    </p>
                     {sortedHospitals.map(hospital => {
                       const isRecommended = hospital.id === recommendedHospitalId;
                       const isPreAssigned = hospital.id === acvCase.preAssignedHospitalId;
@@ -356,17 +361,19 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital }: 
                               </div>
                             </div>
                             
-                            <Button 
-                              size="sm" 
-                              variant={isRecommended ? 'primary' : 'outline'}
-                              className={`shrink-0 px-6 rounded-xl ${isRecommended ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-                              onClick={() => {
-                                onAssignHospital(acvCase.id, hospital.id);
-                                onClose();
-                              }}
-                            >
-                              {isPreAssigned ? 'Confirmar' : 'Asignar'}
-                            </Button>
+                            {canAssign && (
+                              <Button 
+                                size="sm" 
+                                variant={isRecommended ? 'primary' : 'outline'}
+                                className={`shrink-0 px-6 rounded-xl ${isRecommended ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                                onClick={() => {
+                                  onAssignHospital(acvCase.id, hospital.id);
+                                  onClose();
+                                }}
+                              >
+                                {isPreAssigned ? 'Confirmar' : 'Asignar'}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );

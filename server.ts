@@ -149,7 +149,7 @@ app.post('/api/confirm-hospital', async (req, res) => {
       <div style="padding:24px;background-color:#f8fafc">
         <div style="background-color:#d1fae5;border:1px solid #a7f3d0;border-radius:6px;padding:14px 18px;margin-bottom:20px">
           <p style="margin:0;color:#065f46;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#047857;font-size:13px">DINESA ha confirmado la derivación del paciente a <strong>${hospitalName}</strong>.<br/>El hospital destino debe preparar el equipo de stroke para la recepción.</p>
+          <p style="margin:6px 0 0 0;color:#047857;font-size:13px">Coordinación del Centro Stroke ha confirmado la derivación del paciente a <strong>${hospitalName}</strong>.<br/>El hospital destino debe preparar el equipo de stroke para la recepción.</p>
         </div>
         <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
         <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>
@@ -191,7 +191,7 @@ app.post('/api/reassign-hospital', async (req, res) => {
       <div style="padding:24px;background-color:#f8fafc">
         <div style="background-color:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:14px 18px;margin-bottom:20px">
           <p style="margin:0;color:#92400e;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#b45309;font-size:13px">La derivación del paciente a <strong>${cancelledName}</strong> ha sido <strong>cancelada</strong> por decisión operativa de DINESA.<br/>El paciente ha sido redirigido a otro centro asistencial.</p>
+          <p style="margin:6px 0 0 0;color:#b45309;font-size:13px">La derivación del paciente a <strong>${cancelledName}</strong> ha sido <strong>cancelada</strong> por decisión operativa de Coordinación del Centro Stroke.<br/>El paciente ha sido redirigido a otro centro asistencial.</p>
         </div>
         <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
         <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>
@@ -199,7 +199,7 @@ app.post('/api/reassign-hospital', async (req, res) => {
         <p style="margin-top:8px;color:#0f172a;background-color:#e2e8f0;padding:12px;border-radius:6px">${patientData.location?.address || 'N/A'}</p>
         <div style="margin-top:22px;background-color:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:14px 18px">
           <p style="margin:0;color:#9a3412;font-size:13px;font-weight:600">Centro de destino final: ${newHospitalName}</p>
-          <p style="margin:4px 0 0 0;color:#c2410c;font-size:12px">Para consultas operativas, contactar a la Central DINESA.</p>
+          <p style="margin:4px 0 0 0;color:#c2410c;font-size:12px">Para consultas operativas, contactar a Coordinación del Centro Stroke.</p>
         </div>
       </div>
       ${EMAIL_FOOTER}
@@ -214,7 +214,7 @@ app.post('/api/reassign-hospital', async (req, res) => {
       <div style="padding:24px;background-color:#f8fafc">
         <div style="background-color:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:14px 18px;margin-bottom:20px">
           <p style="margin:0;color:#7f1d1d;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#991b1b;font-size:13px">DINESA ha confirmado la derivación de un paciente con <strong>Código ACV</strong> a su institución.<br/>Se solicita activación inmediata del equipo de stroke y preparación de guardia neurológica.</p>
+          <p style="margin:6px 0 0 0;color:#991b1b;font-size:13px">Coordinación del Centro Stroke ha confirmado la derivación de un paciente con <strong>Código ACV</strong> a su institución.<br/>Se solicita activación inmediata del equipo de stroke y preparación de guardia neurológica.</p>
         </div>
         <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
         <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>

@@ -9,9 +9,10 @@ import { CaseDetailModal } from '../../components/dinesa/CaseDetailModal';
 interface MonitorViewProps {
   cases: AcvCase[];
   onAssignHospital: (caseId: string, hospitalId: string) => void;
+  canAssign?: boolean;
 }
 
-export function MonitorView({ cases, onAssignHospital }: MonitorViewProps) {
+export function MonitorView({ cases, onAssignHospital, canAssign = true }: MonitorViewProps) {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const activeCases = useMemo(() => cases.filter(c => c.status === 'PENDING_ASSIGNMENT' || c.status === 'PRE_ASSIGNED' || c.status === 'ASSIGNED_EN_ROUTE' || c.status === 'ARRIVED'), [cases]);
   
@@ -137,6 +138,7 @@ export function MonitorView({ cases, onAssignHospital }: MonitorViewProps) {
           isOpen={!!selectedCaseId}
           onClose={() => setSelectedCaseId(null)}
           onAssignHospital={onAssignHospital}
+          canAssign={canAssign}
         />
       )}
     </div>

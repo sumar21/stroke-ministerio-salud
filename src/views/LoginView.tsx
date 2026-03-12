@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '../components/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/Card';
 import { Role } from '../types';
-import { Ambulance, Monitor, Activity } from 'lucide-react';
+import { Ambulance, Monitor, Activity, ShieldCheck, Building2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { images } from '../images';
 
@@ -64,6 +64,21 @@ export function LoginView({ onLogin }: LoginViewProps) {
             <Button 
               size="xl" 
               variant="outline"
+              className="w-full justify-start gap-4 text-left border-slate-200 hover:border-orange-200 hover:bg-orange-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-orange-100/50 group"
+              onClick={() => onLogin('COORDINATION')}
+            >
+              <div className="bg-slate-100 p-3 rounded-xl text-slate-500 group-hover:bg-orange-100 group-hover:text-orange-700 transition-colors">
+                <Building2 className="w-7 h-7" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-lg tracking-tight">Coordinación Centro Stroke</span>
+                <span className="text-sm font-medium text-slate-500 group-hover:text-orange-700/70 transition-colors">Confirma y reasigna hospital</span>
+              </div>
+            </Button>
+
+            <Button 
+              size="xl" 
+              variant="outline"
               className="w-full justify-start gap-4 text-left border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-red-100/50 group"
               onClick={() => onLogin('DINESA')}
             >
@@ -71,8 +86,23 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 <Monitor className="w-7 h-7" />
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-lg tracking-tight">Central DINESA</span>
-                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Coordinación Operativa</span>
+                <span className="font-bold text-lg tracking-tight">DINESA</span>
+                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600/70 transition-colors">Solo monitoreo de casos</span>
+              </div>
+            </Button>
+
+            <Button 
+              size="xl" 
+              variant="outline"
+              className="w-full justify-start gap-4 text-left border-slate-200 hover:border-blue-200 hover:bg-blue-50 text-slate-700 rounded-2xl h-20 transition-all hover:scale-[1.02] hover:shadow-md hover:shadow-blue-100/50 group"
+              onClick={() => onLogin('ADMIN')}
+            >
+              <div className="bg-slate-100 p-3 rounded-xl text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
+                <ShieldCheck className="w-7 h-7" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-lg tracking-tight">Administrador</span>
+                <span className="text-sm font-medium text-slate-500 group-hover:text-blue-700/70 transition-colors">ABM de hospitales y usuarios</span>
               </div>
             </Button>
           </CardContent>
