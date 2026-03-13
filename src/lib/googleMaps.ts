@@ -1,5 +1,4 @@
-
-export const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_API_KEY = "AIzaSyBpYd5kz7vOQ-gMXP3Ci8vWgULD8hKONE4";
 
 if (!GOOGLE_API_KEY) {
   console.warn("⚠️ Advertencia: No se encontró la variable VITE_GOOGLE_MAPS_API_KEY.");
