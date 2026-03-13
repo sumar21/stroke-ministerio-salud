@@ -1,6 +1,6 @@
-const GOOGLE_API_KEY = "AIzaSyBpYd5kz7vOQ-gMXP3Ci8vWgULD8hKONE4";
+const GOOGLE_PLACES_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
-if (!GOOGLE_API_KEY) {
+if (!GOOGLE_PLACES_API_KEY) {
   console.warn("⚠️ Advertencia: No se encontró la variable VITE_GOOGLE_MAPS_API_KEY.");
 }
 
@@ -24,7 +24,30 @@ export interface PlaceSuggestion {
 
 let placesServicePromise: Promise<any> | null = null;
 
+type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route';
+
+async function callMapsApi(action: MapsAction, payload: Record<string, unknown>) {
+  const response = await fetch('/api/maps', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ action, ...payload })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error || 'Error en el servicio de mapas');
+  }
+
+  return data;
+}
+
 function getPlacesService() {
+  if (!GOOGLE_PLACES_API_KEY) {
+    return Promise.reject(new Error('Missing VITE_GOOGLE_MAPS_API_KEY'));
+  }
+
   if (placesServicePromise) return placesServicePromise;
 
   placesServicePromise = new Promise((resolve, reject) => {
@@ -34,7 +57,7 @@ function getPlacesService() {
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_PLACES_API_KEY}&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
@@ -92,10 +115,7 @@ export async function getAddressSuggestions(
 
 export async function geocodePlaceId(placeId: string): Promise<GeocodeResult> {
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?place_id=${encodeURIComponent(placeId)}&key=${GOOGLE_API_KEY}`
-    );
-    const data = await response.json();
+    const data = await callMapsApi('geocode-place-id', { placeId });
 
     if (data.status === 'OK' && data.results.length > 0) {
       const location = data.results[0].geometry.location;
@@ -116,10 +136,7 @@ export async function geocodePlaceId(placeId: string): Promise<GeocodeResult> {
 
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`
-    );
-    const data = await response.json();
+    const data = await callMapsApi('geocode-address', { address });
 
     if (data.status === 'OK' && data.results.length > 0) {
       const location = data.results[0].geometry.location;
@@ -140,10 +157,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
 
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_API_KEY}`
-    );
-    const data = await response.json();
+    const data = await callMapsApi('reverse-geocode', { lat, lng });
 
     if (data.status === 'OK' && data.results.length > 0) {
       return data.results[0].formatted_address;
@@ -161,32 +175,8 @@ export async function getRouteToHospital(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number }
 ): Promise<RouteMetrics> {
-  const requestBody = {
-    origin: {
-      location: { latLng: { latitude: origin.lat, longitude: origin.lng } }
-    },
-    destination: {
-      location: { latLng: { latitude: destination.lat, longitude: destination.lng } }
-    },
-    travelMode: "DRIVE",
-    routingPreference: "TRAFFIC_AWARE",
-  };
-
   try {
-    const response = await fetch(
-      `https://routes.googleapis.com/directions/v2:computeRoutes`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_API_KEY,
-          'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline'
-        },
-        body: JSON.stringify(requestBody)
-      }
-    );
-
-    const data = await response.json();
+    const data = await callMapsApi('route', { origin, destination });
     if (data.error) throw new Error(data.error.message);
     
     const route = data.routes?.[0];

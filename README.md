@@ -15,6 +15,9 @@ View your app in AI Studio: https://ai.studio/apps/a0e1a7f7-edd1-48ec-bf6f-54af0
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Create a `.env` file based on `.env.example` and complete the values.
+3. For Google Maps, use separate keys:
+   - `VITE_GOOGLE_MAPS_API_KEY`: browser key (only for Places JS, with HTTP referrer restrictions)
+   - `GOOGLE_MAPS_API_KEY`: server key (used by `/api/maps` for Geocoding and Routes)
+4. Run the app:
    `npm run dev`
