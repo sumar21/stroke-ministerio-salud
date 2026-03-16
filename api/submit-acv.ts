@@ -24,21 +24,22 @@ const hospitals: Hospital[] = [
 ];
 
 
-/*
+
 const RECIPIENTS = [
-  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
-  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
-  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar' },
+  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
+  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
+  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar',  bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
 ];
-*/
 
 
 
+/*
 const RECIPIENTS = [
   { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
   { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
+*/
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
