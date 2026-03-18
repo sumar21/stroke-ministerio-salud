@@ -12,7 +12,7 @@ interface CaseDetailModalProps {
   acvCase: AcvCase;
   isOpen: boolean;
   onClose: () => void;
-  onAssignHospital: (caseId: string, hospitalId: string) => Promise<boolean>;
+  onAssignHospital: (caseId: string, hospitalId: string, etaText?: string | null) => Promise<boolean>;
   onCancelCase?: (caseId: string, observation: string) => void;
   canAssign?: boolean;
   showAllHospitals?: boolean;
@@ -475,7 +475,9 @@ export function CaseDetailModal({ acvCase, isOpen, onClose, onAssignHospital, on
                                   disabled={!!isAssigningHospitalId}
                                   onClick={async () => {
                                     setIsAssigningHospitalId(hospital.id);
-                                    const success = await onAssignHospital(acvCase.id, hospital.id);
+                                    const route = hospitalRoutes[hospital.id];
+                                    const newEtaText = route ? `${Math.max(1, Math.round(route.totalDurationSeconds / 60))} min` : null;
+                                    const success = await onAssignHospital(acvCase.id, hospital.id, newEtaText);
                                     setIsAssigningHospitalId(null);
                                     if (success) {
                                       onClose();

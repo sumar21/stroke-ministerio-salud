@@ -8,7 +8,7 @@ import { CaseDetailModal } from '../../components/dinesa/CaseDetailModal';
 
 interface MonitorViewProps {
   cases: AcvCase[];
-  onAssignHospital: (caseId: string, hospitalId: string) => Promise<boolean>;
+  onAssignHospital: (caseId: string, hospitalId: string, etaText?: string | null) => Promise<boolean>;
   onCancelCase?: (caseId: string, observation: string) => void;
   canAssign?: boolean;
   showAllHospitals?: boolean;

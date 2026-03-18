@@ -116,7 +116,7 @@ export default function App() {
     setActiveAmbulanceCaseId(null);
   };
 
-  const handleAssignHospital = async (caseId: string, hospitalId: string): Promise<boolean> => {
+  const handleAssignHospital = async (caseId: string, hospitalId: string, newEtaText?: string | null): Promise<boolean> => {
     const lockKey = `${caseId}:${hospitalId}`;
     if (assignmentLocksRef.current.has(lockKey)) {
       return true;
@@ -143,7 +143,7 @@ export default function App() {
             patientData,
             cancelledHospitalId: oldHospitalId,
             newHospitalId: hospitalId,
-            etaText: currentCase.etaText ?? null,
+            etaText: newEtaText ?? null,
             requestId,
           }),
         }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
@@ -157,7 +157,7 @@ export default function App() {
             patientData,
             cancelledHospitalId: currentCase.preAssignedHospitalId,
             newHospitalId: hospitalId,
-            etaText: currentCase.etaText ?? null,
+            etaText: newEtaText ?? null,
             requestId,
           }),
         }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
@@ -170,7 +170,7 @@ export default function App() {
             caseId,
             patientData,
             confirmedHospitalId: hospitalId,
-            etaText: currentCase.etaText ?? null,
+            etaText: newEtaText ?? null,
             requestId,
           }),
         }).catch(err => console.error('[EMAIL] Error al enviar correo de confirmación:', err));
