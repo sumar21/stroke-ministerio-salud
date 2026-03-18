@@ -243,23 +243,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const distribution = getDistributionList();
 
-    transport.sendMail({
-      from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
-      to: distribution.to,
-      bcc: distribution.bcc || undefined,
-      subject: `[CANCELACIÓN] ACV ${caseId} – Cancelada: ${cancelledName}`,
-      html: cancelHtml,
-    }).then(info => console.log(`[reassign-hospital] cancel sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
-      .catch((mailErr: any) => console.error('[reassign-hospital] cancel sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
+    await Promise.allSettled([
+      transport.sendMail({
+        from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+        to: distribution.to,
+        bcc: distribution.bcc || undefined,
+        subject: `[CANCELACIÓN] ACV ${caseId} – Cancelada: ${cancelledName}`,
+        html: cancelHtml,
+      }).then(info => console.log(`[reassign-hospital] cancel sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+        .catch((mailErr: any) => console.error('[reassign-hospital] cancel sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response)),
 
-    transport.sendMail({
-      from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
-      to: distribution.to,
-      bcc: distribution.bcc || undefined,
-      subject: `[DERIVACIÓN] ACV ${caseId} – En camino a ${newName}`,
-      html: assignHtml,
-    }).then(info => console.log(`[reassign-hospital] assign sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
-      .catch((mailErr: any) => console.error('[reassign-hospital] assign sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
+      transport.sendMail({
+        from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+        to: distribution.to,
+        bcc: distribution.bcc || undefined,
+        subject: `[DERIVACIÓN] ACV ${caseId} – En camino a ${newName}`,
+        html: assignHtml,
+      }).then(info => console.log(`[reassign-hospital] assign sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+        .catch((mailErr: any) => console.error('[reassign-hospital] assign sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response)),
+    ]);
 
     return res.status(200).json({ success: true });
   } catch (err: any) {

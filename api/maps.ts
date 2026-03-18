@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route';
+type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route' | 'autocomplete';
 
 function getServerMapsApiKey() {
   const key = process.env.GOOGLE_MAPS_API_KEY;
@@ -88,6 +88,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const data = await googleGeocodeRequest(`latlng=${body.lat},${body.lng}`);
       return res.status(200).json(data);
+    }
+
+    if (action === 'autocomplete') {
+      if (!body.input) return res.status(400).json({ error: 'Missing input' });
+      const key = getServerMapsApiKey();
+      let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(body.input)}&components=country:ar&language=es&key=${key}`;
+      if (typeof body.lat === 'number' && typeof body.lng === 'number') {
+        url += `&location=${body.lat},${body.lng}&radius=50000`;
+      }
+      const response = await fetch(url);
+      const data = await response.json();
+      return res.status(response.ok ? 200 : 500).json(data);
     }
 
     if (action === 'route') {

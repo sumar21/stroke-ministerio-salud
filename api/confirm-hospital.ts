@@ -221,7 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const distribution = getDistributionList();
 
-    transport.sendMail({
+    await transport.sendMail({
       from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
       to: distribution.to,
       bcc: distribution.bcc || undefined,

@@ -180,17 +180,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[submit-acv] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
     }
 
-    for (const r of RECIPIENTS) {
+    await Promise.allSettled(RECIPIENTS.map(r =>
       transport.sendMail({
         from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
         to: r.email, bcc: r.bcc,
         subject: `[${r.role}] Nuevo Código ACV – ${name}`,
         html,
       }).then(info => console.log(`[submit-acv] sendMail to ${r.role} (${r.email}) OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
-        .catch((mailErr: any) => console.error(`[submit-acv] sendMail to ${r.role} (${r.email}) FAILED:`, mailErr.message, mailErr.code, mailErr.response));
-    }
+        .catch((mailErr: any) => console.error(`[submit-acv] sendMail to ${r.role} (${r.email}) FAILED:`, mailErr.message, mailErr.code, mailErr.response))
+    ));
 
-    return res.status(200).json({ success: true, status: 'PENDING_ASSIGNMENT', etaText, etaSeconds });
+    const status = hospital ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT';
+    return res.status(200).json({ success: true, status, preAssignedHospitalId: hospital?.id ?? null, etaText, etaSeconds });
   } catch (err: any) {
     console.error('submit-acv error:', err);
     return res.status(500).json({ success: false, error: err.message });

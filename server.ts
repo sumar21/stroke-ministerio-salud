@@ -364,7 +364,7 @@ app.post("/api/submit-acv", async (req, res) => {
   }).then(info => console.log(`[submit-acv] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
     .catch((err: any) => console.error('[submit-acv] sendMail FAILED:', err.message, err.code, err.response));
 
-  res.json({ success: true, status: 'PENDING_ASSIGNMENT', preAssignedHospitalId, etaText, etaSeconds });
+  res.json({ success: true, status: preAssignedHospitalId ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT', preAssignedHospitalId, etaText, etaSeconds });
 });
 
 app.post('/api/confirm-hospital', async (req, res) => {
