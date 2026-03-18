@@ -2,42 +2,104 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import nodemailer from 'nodemailer';
 
 interface Hospital {
-  id: string; name: string; isStrokeCenter: boolean;
+  id: string; name: string; isStrokeCenter: boolean; strokeCenterId?: string;
   location: { lat: number; lng: number; address: string };
 }
 
 const hospitals: Hospital[] = [
   { id: 'h1', name: 'Hospital El Cruce (SAMIC)', isStrokeCenter: true, location: { lat: -34.786521, lng: -58.257342, address: 'Av. Calchaquí 5401, Florencio Varela' } },
   { id: 'h2', name: 'Hospital Nacional Prof. Alejandro Posadas', isStrokeCenter: true, location: { lat: -34.630632, lng: -58.575611, address: 'Av. Pres. Arturo U. Illia s/n, El Palomar' } },
-  { id: 'h3', name: 'Hospital Gral. de Agudos Dr. Juan A. Fernández', isStrokeCenter: true, location: { lat: -34.581123, lng: -58.406145, address: 'Cerviño 3356, CABA' } },
-  { id: 'h4', name: 'Hospital Gral. de Agudos Dr. Cosme Argerich', isStrokeCenter: true, location: { lat: -34.628050, lng: -58.359612, address: 'Pi y Margall 750, CABA' } },
-  { id: 'h5', name: 'Hospital Gral. de Agudos Carlos G. Durand', isStrokeCenter: true, location: { lat: -34.609412, lng: -58.437523, address: 'Av. Díaz Vélez 5044, CABA' } },
-  { id: 'h6', name: 'Hospital Gral. de Agudos J. M. Ramos Mejía', isStrokeCenter: true, location: { lat: -34.615830, lng: -58.407250, address: 'Gral. Urquiza 609, CABA' } },
-  { id: 'h7', name: 'Hospital Gral. de Agudos Dr. Ignacio Pirovano', isStrokeCenter: true, location: { lat: -34.566123, lng: -58.472234, address: 'Av. Monroe 3555, CABA' } },
-  { id: 'h8', name: 'Hospital Gral. de Agudos Dr. Teodoro Álvarez', isStrokeCenter: false, location: { lat: -34.625350, lng: -58.468050, address: 'Dr. Juan F. Aranguren 2701, CABA' } },
-  { id: 'h9', name: 'Hospital Gral. de Agudos Parmenio Piñero', isStrokeCenter: false, location: { lat: -34.640812, lng: -58.452834, address: 'Av. Varela 1301, CABA' } },
-  { id: 'h10', name: 'Hospital Gral. de Agudos Donación Francisco Santojanni', isStrokeCenter: true, location: { lat: -34.648200, lng: -58.516430, address: 'Pilar 950, CABA' } },
+  { id: 'h3', name: 'Hospital Evita Pueblo', isStrokeCenter: false, strokeCenterId: 'h1', location: { lat: -34.782859, lng: -58.210940, address: 'C. 136 2905, Berazategui' } },
+  { id: 'h4', name: 'Sanatorio Berazategui', isStrokeCenter: false, strokeCenterId: 'h1', location: { lat: -34.765556, lng: -58.216166, address: 'Av. 14 4123, Berazategui' } },
 ];
 
+// Testing: all emails go to harry.yang@sumardigital.com.ar
 const RECIPIENTS = [
-  { role:'DINESA', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
-  { role:'Centro Coordinador SAME', email:'santiago.bianucci@sumardigital.com.ar', bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
-  { role:'Centro Stroke', email:'santiago.bianucci@sumardigital.com.ar',  bcc:'rodrigo.rizzo@sumardigital.com.ar,harry.yang@sumardigital.com.ar,julian.rossi@sumardigital.com.ar'},
+  { role: 'DINESA',                  email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Stroke',           email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
+
 /*
+// Prod recipients
 const RECIPIENTS = [
-  { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'DINESA',                  email: 'marzumendi@msal.gov.ar',  bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar',    bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Stroke',           email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
 */
 
-function patientRows(p: any) {
-  const r = (l: string, v: string, c = '#0f172a') => `<tr><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:40%;color:#64748b;font-weight:500">${l}</td><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:${c}">${v}</td></tr>`;
-  return [r('Nombre', p.name || 'N/A'), r('DNI', p.id || 'N/A'), r('Edad / Sexo', `${p.age || 'N/A'} / ${p.sex || 'N/A'}`), r('Cobertura', p.coverage || 'N/A'), r('Inicio de Síntomas', p.symptomOnsetTime || 'N/A', '#ef4444'), r('Contacto', p.contactInfo || 'N/A')].join('');
+// ── Brand colours ─────────────────────────────────────────────────────────────
+const C = {
+  navy:   '#242C4F',
+  blue:   '#45658D',
+  gold:   '#ffffff',
+  red:    '#ef4444',
+  amber:  '#f59e0b',
+  green:  '#10b981',
+  slate:  '#f8fafc',
+  border: '#e2e8f0',
+  text:   '#334155',
+  muted:  '#64748b',
+};
+
+// ── BE-FAST symptom labels ────────────────────────────────────────────────────
+const BEFAST_LABELS: Record<string, string> = {
+  equilibrio: 'Pérdida de equilibrio / mareo intenso',
+  vision:     'Pérdida de visión (un ojo o doble/borroso)',
+  cara:       'Asimetría facial (un lado de la cara caído)',
+  brazos:     'Debilidad en brazos',
+  habla:      'Dificultad para hablar',
+};
+
+function formatSymptoms(symptoms: string[]): string {
+  const positive = symptoms.filter(s => !s.endsWith(':no'));
+  const negative = symptoms.filter(s => s.endsWith(':no'));
+  const rows = [
+    ...positive.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.red};font-weight:700">✓</span> <span style="font-weight:600;color:${C.red}">${BEFAST_LABELS[s] ?? s}</span></td></tr>`),
+    ...negative.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.muted}">✗</span> <span style="color:${C.muted}">${BEFAST_LABELS[s.slice(0, -3)] ?? s.slice(0, -3)}</span></td></tr>`),
+  ];
+  return `<table style="width:100%;border-collapse:collapse">${rows.join('')}</table>`;
 }
 
-const FOOTER = `<div style="background:#f1f5f9;padding:16px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0">Mensaje automático – Sistema de Gestión de ACV</div>`;
+// Logo URL — set LOGO_URL env var on Vercel (the public URL of LogoMSAL.png)
+const LOGO_URL = process.env.LOGO_URL || '';
+
+function emailHeader(bannerBg: string, bannerText: string, bannerSub: string) {
+  return `
+    <div style="background:${C.navy};padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+      ${LOGO_URL ? `<img src="${LOGO_URL}" alt="Ministerio de Salud" style="height:44px;object-fit:contain;flex-shrink:0" />` : '<span style="color:#fff;font-weight:700;font-size:13px">Ministerio de Salud</span>'}
+      <span style="color:${C.gold};font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-align:right">Sistema de Gestión de ACV</span>
+    </div>
+    <div style="background:${bannerBg};padding:22px 24px;text-align:center">
+      <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:-0.3px">${bannerText}</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,0.88);font-size:14px">${bannerSub}</p>
+    </div>`;
+}
+
+function patientTable(p: any): string {
+  const row = (label: string, value: string, highlight = false) =>
+    `<tr>
+      <td style="padding:9px 12px;border-bottom:1px solid ${C.border};width:38%;color:${C.muted};font-size:13px;font-weight:500">${label}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid ${C.border};font-weight:600;font-size:13px;color:${highlight ? C.red : C.navy}">${value || '—'}</td>
+    </tr>`;
+  const coverage = p.hasCoverage != null ? (p.hasCoverage ? 'Sí' : 'No') : (p.coverage || '—');
+  return `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;border:1px solid ${C.border}">
+    ${row('Nombre', p.name)}
+    ${row('DNI', p.id)}
+    ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
+    ${row('Cobertura médica', coverage)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Contacto', p.contactInfo)}
+  </table>`;
+}
+
+const EMAIL_FOOTER_HTML = `
+  <div style="background:${C.navy};padding:14px 24px;text-align:center">
+    <p style="margin:0;color:${C.gold};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Ministerio de Salud · República Argentina</p>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.5);font-size:11px">Mensaje automático – Sistema de Gestión de ACV. No responder a este correo.</p>
+  </div>`;
+
 const processedReassignActions = new Map<string, number>();
 const IDEMPOTENCY_WINDOW_MS = 60_000;
 
@@ -108,71 +170,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cancelledName = cancelled?.name ?? 'Hospital anterior';
     const newName = newH?.name ?? 'Hospital nuevo';
     const newAddr = newH?.location.address ?? 'Dirección no disponible';
+    const isIntermediary = newH && !newH.isStrokeCenter && newH.strokeCenterId;
+    const strokeCenter = isIntermediary ? hospitals.find(h => h.id === newH.strokeCenterId) : null;
     const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
+    const destinoDisplay = isIntermediary && strokeCenter
+      ? `${newName} (intermediario) → ${strokeCenter.name}`
+      : newName;
 
     const cancelHtml = `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-        <div style="background:#f59e0b;padding:24px;color:#fff;text-align:center">
-          <h1 style="margin:0;font-size:22px">⚠ CANCELACIÓN DE DERIVACIÓN – CÓDIGO ACV</h1>
-          <p style="margin:10px 0 0;font-size:15px">Hospital cancelado: <strong>${cancelledName}</strong></p>
-        </div>
-        <div style="padding:24px;background:#f8fafc">
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:14px 18px;margin-bottom:20px">
-            <p style="margin:0;color:#92400e;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-            <p style="margin:6px 0 0;color:#b45309;font-size:13px">Derivación a <strong>${cancelledName}</strong> cancelada por Coordinación del Centro Stroke. Paciente redirigido.</p>
-          </div>
-          <h2 style="margin-top:0;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-          <table style="width:100%;border-collapse:collapse;margin-top:12px">${patientRows(patientData || {})}</table>
-          <div style="margin-top:22px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:14px 18px">
-            <p style="margin:0;color:#9a3412;font-size:13px;font-weight:600">Destino final: ${newName}</p>
-          </div>
-        </div>
-        ${FOOTER}
-      </div>`;
+  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+    ${emailHeader(C.amber, '⚠ REASIGNACIÓN – CÓDIGO ACV', `Derivación a <strong>${cancelledName}</strong> cancelada`)}
+    <div style="padding:24px;background:${C.slate}">
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.amber};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+        <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
+        <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:${C.text}">La derivación a <strong>${cancelledName}</strong> fue cancelada. Paciente redirigido a <strong>${newName}</strong>.</p>
+      </div>
+      <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+      ${patientTable(patientData || {})}
+      <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData?.location?.address || '—'}</div>
+      <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Nuevo Destino</p>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px">
+        <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${newName}</p>
+        <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${newAddr}</p>
+      </div>
+    </div>
+    ${EMAIL_FOOTER_HTML}
+  </div>`;
 
     const assignHtml = `
-      <div style="font-family:'Segoe UI',sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-        <div style="background:#ef4444;padding:24px;color:#fff;text-align:center">
-          <h1 style="margin:0;font-size:22px">🚨 ALERTA: CÓDIGO ACV – DERIVACIÓN CONFIRMADA</h1>
-          <p style="margin:10px 0 0;font-size:15px">Hospital destino: <strong>${newName}${etaDisplay}</strong></p>
-        </div>
-        <div style="padding:24px;background:#f8fafc">
-          <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:14px 18px;margin-bottom:20px">
-            <p style="margin:0;color:#7f1d1d;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-            <p style="margin:6px 0 0;color:#991b1b;font-size:13px">Coordinación del Centro Stroke ha derivado un paciente con <strong>Código ACV</strong>. Activar equipo de stroke.</p>
-          </div>
-          <h2 style="margin-top:0;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-          <table style="width:100%;border-collapse:collapse;margin-top:12px">${patientRows(patientData || {})}</table>
-          ${patientData?.symptoms?.length ? `<h3 style="margin-top:22px;font-size:15px">Síntomas</h3><ul style="margin-top:8px;padding-left:20px">${patientData.symptoms.map((s: string) => `<li style="margin-bottom:4px">${s}</li>`).join('')}</ul>` : ''}
-          <h3 style="margin-top:22px;font-size:15px">Hospital Destino</h3>
-          <p style="margin-top:8px;background:#fee2e2;padding:12px;border-radius:6px;border-left:4px solid #ef4444"><strong>${newName}</strong><br/><span style="font-size:13px;color:#374151">${newAddr}</span></p>
-        </div>
-        ${FOOTER}
-      </div>`;
+  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+    ${emailHeader(C.navy, '🚨 ALERTA: CÓDIGO ACV – REASIGNACIÓN', `Nuevo destino: <strong>${newName}${etaDisplay}</strong>`)}
+    <div style="padding:24px;background:${C.slate}">
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.red};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+        <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
+        <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:${C.text}">Reasignación confirmada. Activar equipo de stroke para recepción en <strong>${newName}</strong>.</p>
+      </div>
+      <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+      ${patientTable(patientData || {})}
+      ${(patientData?.symptoms?.length) ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Síntomas BE-FAST</p>${formatSymptoms(patientData.symptoms)}` : ''}
+      <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Hospital Destino</p>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px">
+        <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${newName}</p>
+        <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${newAddr}</p>
+      </div>
+      <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData?.location?.address || '—'}</div>
+    </div>
+    ${EMAIL_FOOTER_HTML}
+  </div>`;
 
-    const transport = nodemailer.createTransport({
+    const smtpConfig = {
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT),
       secure: process.env.EMAIL_SECURE === 'true',
+      requireTLS: true,
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
+      tls: { rejectUnauthorized: false },
+    };
+    console.log('[reassign-hospital] SMTP config (no password):', { ...smtpConfig, auth: { user: smtpConfig.auth.user } });
+
+    const transport = nodemailer.createTransport(smtpConfig);
+
+    try {
+      await transport.verify();
+      console.log('[reassign-hospital] SMTP verify OK');
+    } catch (verifyErr: any) {
+      console.error('[reassign-hospital] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
+    }
 
     const distribution = getDistributionList();
 
-    await transport.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+    transport.sendMail({
+      from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
       to: distribution.to,
       bcc: distribution.bcc || undefined,
       subject: `[CANCELACIÓN] ACV ${caseId} – Cancelada: ${cancelledName}`,
       html: cancelHtml,
-    });
-    await transport.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
+    }).then(info => console.log(`[reassign-hospital] cancel sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+      .catch((mailErr: any) => console.error('[reassign-hospital] cancel sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
+
+    transport.sendMail({
+      from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
       to: distribution.to,
       bcc: distribution.bcc || undefined,
       subject: `[DERIVACIÓN] ACV ${caseId} – En camino a ${newName}`,
       html: assignHtml,
-    });
+    }).then(info => console.log(`[reassign-hospital] assign sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+      .catch((mailErr: any) => console.error('[reassign-hospital] assign sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
 
     return res.status(200).json({ success: true });
   } catch (err: any) {

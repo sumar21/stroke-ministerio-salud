@@ -13,7 +13,6 @@ const hospitals: Hospital[] = [
   { id: 'h4', name: 'Sanatorio Berazategui', isStrokeCenter: false, strokeCenterId: 'h1', location: { lat: -34.765556, lng: -58.216166, address: 'Av. 14 4123, Berazategui' } },
 ];
 
-
 // Testing: all emails go to harry.yang@sumardigital.com.ar
 const RECIPIENTS = [
   { role: 'DINESA',                  email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
@@ -43,25 +42,6 @@ const C = {
   text:   '#334155',
   muted:  '#64748b',
 };
-
-// ── BE-FAST symptom labels ────────────────────────────────────────────────────
-const BEFAST_LABELS: Record<string, string> = {
-  equilibrio: 'Pérdida de equilibrio / mareo intenso',
-  vision:     'Pérdida de visión (un ojo o doble/borroso)',
-  cara:       'Asimetría facial (un lado de la cara caído)',
-  brazos:     'Debilidad en brazos',
-  habla:      'Dificultad para hablar',
-};
-
-function formatSymptoms(symptoms: string[]): string {
-  const positive = symptoms.filter(s => !s.endsWith(':no'));
-  const negative = symptoms.filter(s => s.endsWith(':no'));
-  const rows = [
-    ...positive.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.red};font-weight:700">✓</span> <span style="font-weight:600;color:${C.red}">${BEFAST_LABELS[s] ?? s}</span></td></tr>`),
-    ...negative.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.muted}">✗</span> <span style="color:${C.muted}">${BEFAST_LABELS[s.slice(0, -3)] ?? s.slice(0, -3)}</span></td></tr>`),
-  ];
-  return `<table style="width:100%;border-collapse:collapse">${rows.join('')}</table>`;
-}
 
 // Logo URL — set LOGO_URL env var on Vercel (the public URL of LogoMSAL.png)
 const LOGO_URL = process.env.LOGO_URL || '';
@@ -101,53 +81,20 @@ const EMAIL_FOOTER_HTML = `
     <p style="margin:6px 0 0;color:rgba(255,255,255,0.5);font-size:11px">Mensaje automático – Sistema de Gestión de ACV. No responder a este correo.</p>
   </div>`;
 
-const processedConfirmActions = new Map<string, number>();
-const IDEMPOTENCY_WINDOW_MS = 60_000;
-
 function parseEmails(value?: string) {
   if (!value) return [] as string[];
-  return value
-    .split(',')
-    .map((email) => email.trim())
-    .filter(Boolean);
+  return value.split(',').map(e => e.trim()).filter(Boolean);
 }
 
 function getDistributionList() {
   const toSet = new Set<string>();
   const bccSet = new Set<string>();
-
-  for (const recipient of RECIPIENTS) {
-    if (recipient.email) toSet.add(recipient.email);
-    for (const bccEmail of parseEmails(recipient.bcc)) {
-      bccSet.add(bccEmail);
-    }
+  for (const rec of RECIPIENTS) {
+    if (rec.email) toSet.add(rec.email);
+    for (const b of parseEmails(rec.bcc)) bccSet.add(b);
   }
-
-  for (const toEmail of toSet) {
-    bccSet.delete(toEmail);
-  }
-
-  return {
-    to: Array.from(toSet).join(','),
-    bcc: Array.from(bccSet).join(','),
-  };
-}
-
-function isDuplicateAction(actionKey: string) {
-  const now = Date.now();
-  for (const [key, timestamp] of processedConfirmActions.entries()) {
-    if (now - timestamp > IDEMPOTENCY_WINDOW_MS) {
-      processedConfirmActions.delete(key);
-    }
-  }
-
-  const previous = processedConfirmActions.get(actionKey);
-  if (previous && now - previous <= IDEMPOTENCY_WINDOW_MS) {
-    return true;
-  }
-
-  processedConfirmActions.set(actionKey, now);
-  return false;
+  for (const t of toSet) bccSet.delete(t);
+  return { to: Array.from(toSet).join(','), bcc: Array.from(bccSet).join(',') };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -159,41 +106,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { caseId, patientData, confirmedHospitalId, etaText, requestId } = body;
-    const actionKey = requestId || `${caseId}:${confirmedHospitalId}:confirm`;
+    const { caseId, patientData, assignedHospitalId, observation, cancelledBy } = body;
 
-    if (isDuplicateAction(actionKey)) {
-      return res.status(200).json({ success: true, duplicateIgnored: true });
-    }
+    // Resolve the last assigned hospital and its stroke center
+    const assignedHospital = assignedHospitalId ? hospitals.find(h => h.id === assignedHospitalId) : null;
+    const assignedName = assignedHospital?.name ?? 'No asignado';
+    const responsibleParty = cancelledBy ?? 'Usuario del sistema';
 
-    const confirmed = hospitals.find(h => h.id === confirmedHospitalId);
-    const hospitalName = confirmed?.name ?? 'Hospital desconocido';
-    const hospitalAddress = confirmed?.location.address ?? 'Dirección no disponible';
-    const isIntermediary = confirmed && !confirmed.isStrokeCenter && confirmed.strokeCenterId;
-    const strokeCenter = isIntermediary ? hospitals.find(h => h.id === confirmed.strokeCenterId) : null;
-    const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
-
-    const destinoDisplay = isIntermediary && strokeCenter
-      ? `${hospitalName} (intermediario) → ${strokeCenter.name}`
-      : hospitalName;
 
     const html = `
   <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
-    ${emailHeader(C.green, '✔ DERIVACIÓN CONFIRMADA – CÓDIGO ACV', `Hospital destino: <strong>${hospitalName}${etaDisplay}</strong>`)}
+    ${emailHeader(C.red, '✖ CASO ACV CANCELADO', `Caso: <strong>${caseId}</strong>`)}
     <div style="padding:24px;background:${C.slate}">
-      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.green};border-radius:6px;padding:12px 16px;margin-bottom:20px">
-        <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
-        <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
-        <p style="margin:6px 0 0;font-size:13px;color:${C.text}">Activar equipo de stroke para recepción del paciente en <strong>${hospitalName}</strong>.</p>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.red};border-radius:6px;padding:12px 16px;margin-bottom:14px">
+        <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Cancelado por</p>
+        <p style="margin:4px 0 0;font-size:14px;font-weight:700;color:${C.navy}">${responsibleParty}</p>
       </div>
+      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.amber};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+        <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Motivo</p>
+        <p style="margin:4px 0 0;font-size:13px;color:${C.text}">${observation || 'Sin observaciones'}</p>
+      </div>
+      ${assignedHospital ? `<div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;margin-bottom:20px"><p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Hospital al momento de cancelación</p><p style="margin:4px 0 0;font-size:14px;font-weight:700;color:${C.navy}">${assignedName}</p></div>` : ''}
       <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
       ${patientTable(patientData || {})}
-      ${(patientData?.symptoms?.length) ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Síntomas BE-FAST</p>${formatSymptoms(patientData.symptoms)}` : ''}
-      <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Hospital Confirmado</p>
-      <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.green};border-radius:6px;padding:12px 16px">
-        <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${hospitalName}</p>
-        <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${hospitalAddress}</p>
-      </div>
       <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
       <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData?.location?.address || '—'}</div>
     </div>
@@ -208,15 +143,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       tls: { rejectUnauthorized: false },
     };
-    console.log('[confirm-hospital] SMTP config (no password):', { ...smtpConfig, auth: { user: smtpConfig.auth.user } });
+    console.log('[cancel-case] SMTP config (no password):', { ...smtpConfig, auth: { user: smtpConfig.auth.user } });
 
     const transport = nodemailer.createTransport(smtpConfig);
 
     try {
       await transport.verify();
-      console.log('[confirm-hospital] SMTP verify OK');
+      console.log('[cancel-case] SMTP verify OK');
     } catch (verifyErr: any) {
-      console.error('[confirm-hospital] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
+      console.error('[cancel-case] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
     }
 
     const distribution = getDistributionList();
@@ -225,14 +160,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
       to: distribution.to,
       bcc: distribution.bcc || undefined,
-      subject: `[CONFIRMACIÓN] Código ACV ${caseId} – ${hospitalName}`,
+      subject: `[CANCELACIÓN] Código ACV ${caseId} – Cancelado por ${responsibleParty}`,
       html,
-    }).then(info => console.log(`[confirm-hospital] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
-      .catch((mailErr: any) => console.error('[confirm-hospital] sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
+    }).then(info => console.log(`[cancel-case] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+      .catch((mailErr: any) => console.error('[cancel-case] sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
 
     return res.status(200).json({ success: true });
   } catch (err: any) {
-    console.error('confirm-hospital error:', err);
+    console.error('cancel-case error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }

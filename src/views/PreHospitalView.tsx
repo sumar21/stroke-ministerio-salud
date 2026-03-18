@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AcvCase, PatientData } from '../types';
 import { HomeMobile } from './prehospital/HomeMobile';
 import { PreHospitalForm } from './prehospital/PreHospitalForm';
@@ -17,27 +17,14 @@ export function PreHospitalView({ onLogout, onSubmitCase, onArriveCase, activeCa
   const [viewMode, setViewMode] = useState<'HOME' | 'FORM' | 'DETAIL'>('HOME');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (activeCase) {
-      setViewMode('DETAIL');
-      setSelectedCaseId(activeCase.id);
-    } else {
-      // If no active case passed from parent, default to HOME unless we are in FORM mode
-      if (viewMode === 'DETAIL') {
-         setViewMode('HOME');
-      }
-    }
-  }, [activeCase]);
-
   const currentDetailCase = cases.find(c => c.id === selectedCaseId);
 
   if (viewMode === 'DETAIL' && currentDetailCase) {
     return (
-      <CaseDetail 
-        caseData={currentDetailCase} 
+      <CaseDetail
+        caseData={currentDetailCase}
         onBack={() => {
           setViewMode('HOME');
-          onClearActiveCase();
         }}
         onArrive={onArriveCase}
       />
@@ -46,10 +33,10 @@ export function PreHospitalView({ onLogout, onSubmitCase, onArriveCase, activeCa
 
   if (viewMode === 'FORM') {
     return (
-      <PreHospitalForm 
+      <PreHospitalForm
         onSubmit={(data, status, preAssignedHospitalId, etaText) => {
           onSubmitCase(data, status, preAssignedHospitalId, etaText);
-          // The parent will update activeCase, which triggers the effect to switch to DETAIL
+          setViewMode('HOME');
         }}
         onCancel={() => setViewMode('HOME')}
       />
@@ -57,14 +44,15 @@ export function PreHospitalView({ onLogout, onSubmitCase, onArriveCase, activeCa
   }
 
   return (
-    <HomeMobile 
+    <HomeMobile
       onLogout={onLogout}
       onNewCase={() => setViewMode('FORM')}
       onSelectCase={(caseId) => {
         setSelectedCaseId(caseId);
         setViewMode('DETAIL');
       }}
-      cases={cases}
+      activeCase={activeCase}
+      onDismissCase={onClearActiveCase}
     />
   );
 }

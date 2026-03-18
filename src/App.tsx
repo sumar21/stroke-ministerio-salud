@@ -1,61 +1,82 @@
 import React, { useRef, useState } from 'react';
-import { Role, AcvCase, PatientData, CaseStatus } from './types';
+import { Role, AcvCase, PatientData, CaseStatus, Hospital, HospitalAssignment } from './types';
 import { LoginView } from './views/LoginView';
 import { PreHospitalView } from './views/PreHospitalView';
 import { DinesaView } from './views/DinesaView';
+import { HospitalSelectView } from './views/HospitalSelectView';
+import { mockHospitals } from './data/mockHospitals';
 
 const initialMockCases: AcvCase[] = [
   {
-    id: 'ACV-8492',
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
-    status: 'PENDING_ASSIGNMENT',
+    id: 'ACV-0041',
+    createdAt: new Date(Date.now() - 72 * 60 * 1000).toISOString(),
+    status: 'ARRIVED',
+    preAssignedHospitalId: 'h1',
+    assignedHospitalId: 'h1',
+    assignedAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    etaText: '18 min',
     patient: {
-      id: '28491033',
-      name: 'Carlos Rodríguez',
-      age: 65,
+      id: '28541763',
+      name: 'Roberto Fernández',
+      age: 67,
       sex: 'M',
-      coverage: 'OBRA_SOCIAL',
-      symptomOnsetTime: '08:30',
-      symptoms: ['Hemiparesia derecha', 'Afasia', 'Desviación de comisura labial'],
-      contactInfo: 'Hija (María) - 1145678901',
-      clinicalObservations: 'Paciente hipertenso, refiere haber dejado la medicación hace 1 semana.',
-      location: {
-        lat: -34.6131,
-        lng: -58.3772,
-        address: 'Av. de Mayo 500, CABA'
-      }
-    }
+      hasCoverage: true,
+      symptomOnsetTime: '08:45',
+      symptoms: ['cara', 'brazos', 'habla'],
+      contactInfo: '011-4523-8871',
+      clinicalObservations: 'Paciente hipertenso. TA 180/110.',
+      location: { lat: -34.799, lng: -58.271, address: 'Av. Mitre 1230, Quilmes, Buenos Aires' },
+    },
   },
   {
-    id: 'ACV-3105',
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 mins ago
+    id: 'ACV-0057',
+    createdAt: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
     status: 'ASSIGNED_EN_ROUTE',
-    assignedHospitalId: 'h1',
-    assignedAt: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
+    preAssignedHospitalId: 'h2',
+    assignedHospitalId: 'h2',
+    assignedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    etaText: '22 min',
     patient: {
-      id: '14552910',
-      name: 'Marta Gómez',
-      age: 72,
+      id: '35218904',
+      name: 'María Elena Soria',
+      age: 54,
       sex: 'F',
-      coverage: 'OBRA_SOCIAL',
-      symptomOnsetTime: '07:15',
-      symptoms: ['Pérdida de fuerza en brazo izquierdo', 'Dificultad para hablar'],
-      contactInfo: 'Vecino - 1123456789',
-      clinicalObservations: 'Paciente diabética. Glucemia capilar 140 mg/dl.',
-      location: {
-        lat: -34.7600,
-        lng: -58.2100,
-        address: 'Calle 14 123, Berazategui'
-      }
-    }
-  }
+      hasCoverage: false,
+      symptomOnsetTime: '10:15',
+      symptoms: ['vision', 'equilibrio'],
+      contactInfo: '011-6712-4490',
+      clinicalObservations: '',
+      location: { lat: -34.618, lng: -58.561, address: 'Calle Rivadavia 450, Morón, Buenos Aires' },
+    },
+  },
+  {
+    id: 'ACV-0033',
+    createdAt: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
+    status: 'CANCELLED',
+    preAssignedHospitalId: 'h4',
+    assignedHospitalId: 'h4',
+    cancellationObservation: 'Paciente estabilizado en origen. Traslado no requerido.',
+    patient: {
+      id: '22184537',
+      name: 'Jorge Héctor Medina',
+      age: 71,
+      sex: 'M',
+      hasCoverage: true,
+      symptomOnsetTime: '07:30',
+      symptoms: ['cara', 'brazos'],
+      contactInfo: '011-4256-9031',
+      clinicalObservations: 'Síntomas resueltos antes del traslado.',
+      location: { lat: -34.773, lng: -58.213, address: 'Av. 14 2100, Berazategui, Buenos Aires' },
+    },
+  },
 ];
 
 export default function App() {
   const [role, setRole] = useState<Role>(null);
   const [cases, setCases] = useState<AcvCase[]>(initialMockCases);
   const assignmentLocksRef = useRef<Set<string>>(new Set());
-  
+  const [selectedCoordinationHospital, setSelectedCoordinationHospital] = useState<Hospital | null>(null);
+
   // For the pre-hospital view, we track the active case they just created
   const [activeAmbulanceCaseId, setActiveAmbulanceCaseId] = useState<string | null>(null);
 
@@ -65,7 +86,7 @@ export default function App() {
 
   const handleLogout = () => {
     setRole(null);
-    setActiveAmbulanceCaseId(null);
+    setSelectedCoordinationHospital(null);
   };
 
   const handleSubmitCase = (patientData: PatientData, status: CaseStatus = 'PENDING_ASSIGNMENT', preAssignedHospitalId?: string, etaText?: string) => {
@@ -78,7 +99,7 @@ export default function App() {
       patient: patientData
     };
     setCases(prev => [...prev, newCase]);
-    setActiveAmbulanceCaseId(newCase.id);
+    if (status !== 'SAVED') setActiveAmbulanceCaseId(newCase.id);
   };
 
   const handleArriveCase = (caseId: string) => {
@@ -87,11 +108,12 @@ export default function App() {
         return {
           ...c,
           status: 'ARRIVED',
-          assignedAt: new Date().toISOString() // Using assignedAt as arrival time for metrics
+          assignedAt: new Date().toISOString()
         };
       }
       return c;
     }));
+    setActiveAmbulanceCaseId(null);
   };
 
   const handleAssignHospital = async (caseId: string, hospitalId: string): Promise<boolean> => {
@@ -104,80 +126,116 @@ export default function App() {
     // Fetch calls MUST be outside the setCases updater — React 18 StrictMode
     // runs updater functions twice in development, which would send duplicate emails.
     const currentCase = cases.find(c => c.id === caseId);
-    let emailRequestFailed = false;
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     if (currentCase) {
       const patientData = currentCase.patient;
+      const oldHospitalId = currentCase.assignedHospitalId ?? null;
+      const wasPreAssignedDifferently = currentCase.preAssignedHospitalId && currentCase.preAssignedHospitalId !== hospitalId;
 
-      if (currentCase.preAssignedHospitalId && currentCase.preAssignedHospitalId !== hospitalId) {
-        // Hospital changed: cancellation to old + assignment to new
-        try {
-          const response = await fetch('/api/reassign-hospital', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              caseId,
-              patientData,
-              cancelledHospitalId: currentCase.preAssignedHospitalId,
-              newHospitalId: hospitalId,
-              etaText: currentCase.etaText ?? null,
-              requestId,
-            }),
-          });
-          if (!response.ok) {
-            emailRequestFailed = true;
-            console.error('[EMAIL] Error HTTP en reasignación:', response.status);
-          }
-        } catch (err) {
-          emailRequestFailed = true;
-          console.error('[EMAIL] Error al enviar correos de reasignación:', err);
-        }
-      } else if (!currentCase.preAssignedHospitalId) {
-        // No pre-assignment: fresh confirmation email
-        try {
-          const response = await fetch('/api/confirm-hospital', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              caseId,
-              patientData,
-              confirmedHospitalId: hospitalId,
-              etaText: currentCase.etaText ?? null,
-              requestId,
-            }),
-          });
-          if (!response.ok) {
-            emailRequestFailed = true;
-            console.error('[EMAIL] Error HTTP en confirmación:', response.status);
-          }
-        } catch (err) {
-          emailRequestFailed = true;
-          console.error('[EMAIL] Error al enviar correo de confirmación:', err);
-        }
+      if (oldHospitalId && oldHospitalId !== hospitalId) {
+        // Already assigned to a hospital and now changing → reassign
+        fetch('/api/reassign-hospital', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId,
+            patientData,
+            cancelledHospitalId: oldHospitalId,
+            newHospitalId: hospitalId,
+            etaText: currentCase.etaText ?? null,
+            requestId,
+          }),
+        }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
+      } else if (wasPreAssignedDifferently) {
+        // DINESA changing from pre-assigned to a different hospital
+        fetch('/api/reassign-hospital', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId,
+            patientData,
+            cancelledHospitalId: currentCase.preAssignedHospitalId,
+            newHospitalId: hospitalId,
+            etaText: currentCase.etaText ?? null,
+            requestId,
+          }),
+        }).catch(err => console.error('[EMAIL] Error al enviar correos de reasignación:', err));
+      } else if (!currentCase.preAssignedHospitalId && !oldHospitalId) {
+        // First manual assignment with no pre-assignment from submit-acv
+        fetch('/api/confirm-hospital', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId,
+            patientData,
+            confirmedHospitalId: hospitalId,
+            etaText: currentCase.etaText ?? null,
+            requestId,
+          }),
+        }).catch(err => console.error('[EMAIL] Error al enviar correo de confirmación:', err));
       }
-      // preAssignedHospitalId === hospitalId: confirmed same hospital, no email needed
+      // else: preAssignedHospitalId === hospitalId (DINESA approving same pre-assigned) → no email, submit-acv already notified
     }
 
     try {
       setCases(prev => prev.map(c => {
         if (c.id === caseId) {
+          const now = new Date().toISOString();
+          const isReassignment = c.assignedHospitalId && c.assignedHospitalId !== hospitalId;
+          const newStatus = isReassignment && c.status !== 'REASSIGNED'
+            ? 'REASSIGNED'
+            : c.status === 'REASSIGNED'
+              ? 'REASSIGNED'
+              : 'ASSIGNED_EN_ROUTE';
+          const prevEntry: HospitalAssignment | null =
+            c.assignedHospitalId ? { hospitalId: c.assignedHospitalId, assignedAt: c.assignedAt ?? now } : null;
           return {
             ...c,
-            status: 'ASSIGNED_EN_ROUTE',
+            status: newStatus,
             assignedHospitalId: hospitalId,
-            assignedAt: new Date().toISOString()
+            assignedAt: now,
+            hospitalHistory: prevEntry
+              ? [...(c.hospitalHistory ?? []), prevEntry]
+              : (c.hospitalHistory ?? []),
           };
         }
         return c;
       }));
 
-      return !emailRequestFailed;
+      return true;
     } finally {
       assignmentLocksRef.current.delete(lockKey);
     }
   };
 
+
+  const handleCancelCase = (caseId: string, observation: string) => {
+    const currentCase = cases.find(c => c.id === caseId);
+    if (currentCase) {
+      const cancelledBy = role === 'DINESA'
+        ? 'Centro Coordinador Nacional (DINESA)'
+        : role === 'COORDINATION'
+          ? `Centro Stroke: ${selectedCoordinationHospital?.name ?? 'Hospital'}`
+          : role ?? 'Usuario del sistema';
+      fetch('/api/cancel-case', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseId,
+          patientData: currentCase.patient,
+          assignedHospitalId: currentCase.assignedHospitalId ?? null,
+          observation,
+          cancelledBy,
+        }),
+      }).catch(err => console.error('[EMAIL] Error al enviar correo de cancelación:', err));
+    }
+    setCases(prev => prev.map(c =>
+      c.id === caseId
+        ? { ...c, status: 'CANCELLED', cancellationObservation: observation }
+        : c
+    ));
+  };
 
   if (!role) {
     return <LoginView onLogin={handleLogin} />;
@@ -198,12 +256,55 @@ export default function App() {
   }
 
   if (role === 'COORDINATION') {
+    if (!selectedCoordinationHospital) {
+      return (
+        <HospitalSelectView
+          onSelect={setSelectedCoordinationHospital}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
+    // Filter cases visible to this hospital
+    const coordinationCases = cases.filter(c => {
+      const hospital = selectedCoordinationHospital;
+
+      if (c.status === 'PRE_ASSIGNED') {
+        // Only the pre-assigned hospital sees it directly
+        if (c.preAssignedHospitalId === hospital.id) return true;
+        // Stroke centers also see cases pre-assigned to their intermediaries
+        if (hospital.isStrokeCenter) {
+          const preAssigned = mockHospitals.find(h => h.id === c.preAssignedHospitalId);
+          return preAssigned?.strokeCenterId === hospital.id;
+        }
+        return false;
+      }
+
+      if (c.status === 'PENDING_ASSIGNMENT') {
+        // No pre-assignment — only stroke centers see these (intermediaries cannot act on them)
+        return hospital.isStrokeCenter === true;
+      }
+
+      // ASSIGNED_EN_ROUTE, REASSIGNED, ARRIVED, CANCELLED
+      const relevantId = c.assignedHospitalId;
+      if (!relevantId) return false;
+      if (relevantId === hospital.id) return true;
+      if (hospital.isStrokeCenter) {
+        const assignedHospital = mockHospitals.find(h => h.id === relevantId);
+        return assignedHospital?.strokeCenterId === hospital.id;
+      }
+      return false;
+    });
+
     return (
-      <DinesaView 
+      <DinesaView
         mode="COORDINATION"
         onLogout={handleLogout}
-        cases={cases}
+        cases={coordinationCases}
         onAssignHospital={handleAssignHospital}
+        onCancelCase={handleCancelCase}
+        selectedHospital={selectedCoordinationHospital}
+        onChangeHospital={() => setSelectedCoordinationHospital(null)}
       />
     );
   }
@@ -215,6 +316,7 @@ export default function App() {
         onLogout={handleLogout}
         cases={cases}
         onAssignHospital={handleAssignHospital}
+        onCancelCase={handleCancelCase}
       />
     );
   }
@@ -226,6 +328,7 @@ export default function App() {
         onLogout={handleLogout}
         cases={cases}
         onAssignHospital={handleAssignHospital}
+        onCancelCase={handleCancelCase}
       />
     );
   }

@@ -1,9 +1,3 @@
-const GOOGLE_PLACES_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-
-if (!GOOGLE_PLACES_API_KEY) {
-  console.warn("⚠️ Advertencia: No se encontró la variable VITE_GOOGLE_MAPS_API_KEY.");
-}
-
 
 export interface RouteMetrics {
   totalDistanceMeters: number;
@@ -22,9 +16,7 @@ export interface PlaceSuggestion {
   placeId: string;
 }
 
-let placesServicePromise: Promise<any> | null = null;
-
-type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route';
+type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route' | 'autocomplete';
 
 async function callMapsApi(action: MapsAction, payload: Record<string, unknown>) {
   const response = await fetch('/api/maps', {
@@ -43,74 +35,51 @@ async function callMapsApi(action: MapsAction, payload: Record<string, unknown>)
   return data;
 }
 
-function getPlacesService() {
-  if (!GOOGLE_PLACES_API_KEY) {
-    return Promise.reject(new Error('Missing VITE_GOOGLE_MAPS_API_KEY'));
-  }
-
-  if (placesServicePromise) return placesServicePromise;
-
-  placesServicePromise = new Promise((resolve, reject) => {
-    if ((window as any).google && (window as any).google.maps && (window as any).google.maps.places) {
-      resolve(new (window as any).google.maps.places.AutocompleteService());
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_PLACES_API_KEY}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if ((window as any).google && (window as any).google.maps && (window as any).google.maps.places) {
-        resolve(new (window as any).google.maps.places.AutocompleteService());
-      } else {
-        reject(new Error("Google Maps Places library not loaded"));
-      }
-    };
-    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
-    document.head.appendChild(script);
-  });
-
-  return placesServicePromise;
-}
-
 // Obtiene sugerencias mientras el usuario escribe, priorizando Argentina y la cercanía (si hay lat/lng)
 export async function getAddressSuggestions(
-  input: string, 
-  currentLat?: number, 
+  input: string,
+  currentLat?: number,
   currentLng?: number
 ): Promise<PlaceSuggestion[]> {
   if (!input || input.length < 3) return [];
 
   try {
-    const service = await getPlacesService();
-    
-    const request: any = {
-      input,
-      componentRestrictions: { country: 'ar' }
-    };
-
-    if (currentLat && currentLng && (window as any).google) {
-      request.location = new (window as any).google.maps.LatLng(currentLat, currentLng);
-      request.radius = 50000; // 50km
+    const payload: Record<string, unknown> = { input };
+    if (typeof currentLat === 'number' && typeof currentLng === 'number') {
+      payload.lat = currentLat;
+      payload.lng = currentLng;
     }
 
-    return new Promise((resolve) => {
-      service.getPlacePredictions(request, (predictions: any[], status: any) => {
-        if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && predictions) {
-          resolve(predictions.map(p => ({
-            description: p.description,
-            placeId: p.place_id
-          })));
-        } else {
-          resolve([]);
-        }
-      });
-    });
+    const data = await callMapsApi('autocomplete', payload);
+
+    if (data.status === 'OK' && data.predictions) {
+      return data.predictions.map((p: any) => ({
+        description: p.description,
+        placeId: p.place_id,
+      }));
+    }
+
+    return [];
   } catch (error) {
-    console.error("Autocomplete Error:", error);
+    console.error('Autocomplete Error:', error);
     return [];
   }
+}
+
+async function reverseGeocodeClientFallback(lat: number, lng: number): Promise<string> {
+  const g = (window as any).google;
+  if (!g?.maps?.Geocoder) throw new Error('Google Geocoder not available');
+
+  const geocoder = new g.maps.Geocoder();
+  return new Promise((resolve, reject) => {
+    geocoder.geocode({ location: { lat, lng } }, (results: any[], status: any) => {
+      if (status === g.maps.GeocoderStatus.OK && results?.length) {
+        resolve(results[0].formatted_address);
+      } else {
+        reject(new Error(`Client reverse geocode failed: ${status}`));
+      }
+    });
+  });
 }
 
 export async function geocodePlaceId(placeId: string): Promise<GeocodeResult> {
@@ -166,8 +135,13 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
       throw new Error(data.error_message || 'Address not found');
     }
   } catch (error) {
-    console.error("Reverse Geocoding Error:", error);
-    throw error;
+    console.warn('Server reverse geocoding failed, trying browser fallback:', error);
+    try {
+      return await reverseGeocodeClientFallback(lat, lng);
+    } catch (fallbackError) {
+      console.error('Reverse Geocoding fallback error:', fallbackError);
+      throw error;
+    }
   }
 }
 

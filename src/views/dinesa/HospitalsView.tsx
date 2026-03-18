@@ -5,47 +5,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/Card'
 import { Hospital } from '../../types';
 import { mockHospitals } from '../../data/mockHospitals';
 import { Plus, Edit2, Trash2, MapPin, CheckCircle2, XCircle, Search, Loader2 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { GoogleMap, MarkerF, useJsApiLoader } from '@react-google-maps/api';
 import { Modal } from '../../components/Modal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { getAddressSuggestions, geocodePlaceId, reverseGeocode, PlaceSuggestion } from '../../lib/googleMaps';
 
-// Fix Leaflet icon issue
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-function LocationMarker({ position, onClick }: { position: L.LatLng | null, onClick: (pos: L.LatLng) => void }) {
-  const map = useMapEvents({
-    click(e) {
-      onClick(e.latlng);
-      map.flyTo(e.latlng, map.getZoom());
-    },
-  });
-
-  useEffect(() => {
-    if (position) {
-      map.flyTo(position, map.getZoom());
-    }
-  }, [position, map]);
-
-  return position === null ? null : (
-    <Marker position={position}></Marker>
-  );
-}
+const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+const mapLibraries: ('places')[] = ['places'];
 
 export function HospitalsView() {
+  const { isLoaded: isGoogleMapsLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: googleMapsApiKey || '',
+    libraries: mapLibraries,
+  });
   const [hospitals, setHospitals] = useState<Hospital[]>(mockHospitals);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentHospital, setCurrentHospital] = useState<Partial<Hospital> | null>(null);
   const [hospitalToDelete, setHospitalToDelete] = useState<string | null>(null);
-  const [mapPosition, setMapPosition] = useState<L.LatLng | null>(null);
+  const [mapPosition, setMapPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null);
   
   // Autocomplete state
   const [addressInput, setAddressInput] = useState('');
@@ -84,8 +64,8 @@ export function HospitalsView() {
     setIsSearching(true);
     try {
       const result = await geocodePlaceId(suggestion.placeId);
-      const newLatLng = L.latLng(result.lat, result.lng);
-      setMapPosition(newLatLng);
+      const newPos = { lat: result.lat, lng: result.lng };
+      setMapPosition(newPos);
       if (currentHospital) {
         setCurrentHospital({
           ...currentHospital,
@@ -104,30 +84,18 @@ export function HospitalsView() {
     }
   };
 
-  // Reverse geocode when map is clicked
+  // Pan map when position changes (e.g. from autocomplete)
   useEffect(() => {
-    if (mapPosition && isEditing) {
-      // Only reverse geocode if the distance from current hospital location is significant
-      // or if we're in "add new" mode and just clicked
-      const updateAddress = async () => {
-        try {
-          const address = await reverseGeocode(mapPosition.lat, mapPosition.lng);
-          setAddressInput(address);
-        } catch (error) {
-          console.error("Reverse geocoding error:", error);
-        }
-      };
-
-      // Debounce or only trigger if it's a manual map click (not initial load)
-      // For simplicity in this mock, we'll just check if address is empty or if it's a new position
+    if (mapInstance && mapPosition) {
+      mapInstance.panTo(mapPosition);
     }
-  }, [mapPosition]);
+  }, [mapInstance, mapPosition]);
 
-  const handleMapClick = async (latlng: L.LatLng) => {
-    setMapPosition(latlng);
+  const handleMapClick = async (lat: number, lng: number) => {
+    setMapPosition({ lat, lng });
     setIsSearching(true);
     try {
-      const address = await reverseGeocode(latlng.lat, latlng.lng);
+      const address = await reverseGeocode(lat, lng);
       setAddressInput(address);
     } catch (error) {
       console.error("Error reverse geocoding:", error);
@@ -139,7 +107,7 @@ export function HospitalsView() {
   const handleEdit = (hospital: Hospital) => {
     setCurrentHospital(hospital);
     setAddressInput(hospital.location.address);
-    setMapPosition(L.latLng(hospital.location.lat, hospital.location.lng));
+    setMapPosition({ lat: hospital.location.lat, lng: hospital.location.lng });
     setIsEditing(true);
   };
 
@@ -152,12 +120,16 @@ export function HospitalsView() {
       email: ''
     });
     setAddressInput('');
-    setMapPosition(L.latLng(-34.6037, -58.3816)); // Default to Buenos Aires
+    setMapPosition({ lat: -34.6037, lng: -58.3816 }); // Default to Buenos Aires
     setIsEditing(true);
   };
 
   const handleSave = () => {
     if (currentHospital && currentHospital.id) {
+      if (!currentHospital.isStrokeCenter && !currentHospital.strokeCenterId) {
+        alert('Debe asignar un Centro Stroke de referencia para hospitales intermedios.');
+        return;
+      }
       const updatedHospital = {
         ...currentHospital,
         location: {
@@ -201,7 +173,7 @@ export function HospitalsView() {
           <p className="text-sm text-slate-500 font-medium">Administración de centros de derivación y Stroke Centers de la red.</p>
         </div>
         {!isEditing && (
-          <Button onClick={handleAddNew} className="bg-blue-600 hover:bg-blue-700 shadow-sm rounded-xl px-6">
+          <Button onClick={handleAddNew} className="bg-brand-navy hover:bg-brand-navy/90 shadow-sm rounded-xl px-6">
             <Plus className="w-4 h-4 mr-2" /> Nuevo Hospital
           </Button>
         )}
@@ -235,7 +207,7 @@ export function HospitalsView() {
               setMapPosition(null);
               setAddressInput('');
             }}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 shadow-md rounded-xl px-8">Guardar Cambios</Button>
+            <Button onClick={handleSave} className="bg-brand-navy hover:bg-brand-navy/90 shadow-md rounded-xl px-8">Guardar Cambios</Button>
           </>
         }
       >
@@ -302,32 +274,61 @@ export function HospitalsView() {
                 </div>
               </div>
               <div className="h-[180px] w-full rounded-xl overflow-hidden border border-slate-200 shadow-inner">
-                <MapContainer 
-                  center={mapPosition || [-34.6037, -58.3816]} 
-                  zoom={12} 
-                  style={{ height: '100%', width: '100%' }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <LocationMarker position={mapPosition} onClick={handleMapClick} />
-                </MapContainer>
+                {isGoogleMapsLoaded ? (
+                  <GoogleMap
+                    mapContainerStyle={{ height: '100%', width: '100%' }}
+                    center={mapPosition || { lat: -34.6037, lng: -58.3816 }}
+                    zoom={13}
+                    options={{ disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy' }}
+                    onLoad={(map) => setMapInstance(map)}
+                    onClick={(e) => {
+                      if (e.latLng) {
+                        handleMapClick(e.latLng.lat(), e.latLng.lng());
+                      }
+                    }}
+                  >
+                    {mapPosition && (
+                      <MarkerF position={mapPosition} />
+                    )}
+                  </GoogleMap>
+                ) : (
+                  <div className="h-full w-full grid place-items-center text-sm text-slate-400 bg-slate-50">
+                    Cargando mapa...
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-              <input 
-                type="checkbox" 
+            <div className="flex items-center gap-3 p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
+              <input
+                type="checkbox"
                 id="isStrokeCenter"
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                className="w-4 h-4 rounded border-slate-300 accent-brand-navy focus:ring-brand-blue transition-all cursor-pointer"
                 checked={currentHospital?.isStrokeCenter || false}
-                onChange={e => setCurrentHospital({...currentHospital!, isStrokeCenter: e.target.checked})}
+                onChange={e => setCurrentHospital({...currentHospital!, isStrokeCenter: e.target.checked, strokeCenterId: e.target.checked ? undefined : currentHospital?.strokeCenterId})}
               />
               <label htmlFor="isStrokeCenter" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
-                Habilitar como <span className="text-blue-700 font-black">Stroke Center</span>
+                Habilitar como <span className="text-brand-navy font-black">Centro Stroke</span>
               </label>
             </div>
+
+            {!currentHospital?.isStrokeCenter && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Centro Stroke de Referencia <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-navy/30"
+                  value={currentHospital?.strokeCenterId || ''}
+                  onChange={e => setCurrentHospital({...currentHospital!, strokeCenterId: e.target.value || undefined})}
+                >
+                  <option value="">— Seleccionar Centro Stroke —</option>
+                  {hospitals.filter(h => h.isStrokeCenter && h.id !== currentHospital?.id).map(h => (
+                    <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
@@ -363,12 +364,19 @@ export function HospitalsView() {
                     <td className="px-6 py-5 text-center">
                       {hospital.isStrokeCenter ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest border border-emerald-100">
-                          <CheckCircle2 className="w-3 h-3" /> Stroke Center
+                          <CheckCircle2 className="w-3 h-3" /> Centro Stroke
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-slate-100">
-                          <XCircle className="w-3 h-3" /> General
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-slate-100">
+                            <XCircle className="w-3 h-3" /> Intermedio
+                          </span>
+                          {hospital.strokeCenterId && (
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              → {hospitals.find(h => h.id === hospital.strokeCenterId)?.name ?? hospital.strokeCenterId}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">

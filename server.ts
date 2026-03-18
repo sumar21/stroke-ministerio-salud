@@ -2,9 +2,87 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { mockHospitals } from "./src/data/mockHospitals.js";
 
 dotenv.config();
+
+// ── Logo (embedded as base64 so it works in any email client) ────────────────
+let LOGO_DATA_URI = '';
+try {
+  const buf = fs.readFileSync(path.join(process.cwd(), 'src/public/LogoMSAL.png'));
+  LOGO_DATA_URI = `data:image/png;base64,${buf.toString('base64')}`;
+} catch { console.warn('[server] Could not load LogoMSAL.png – emails will have no logo'); }
+
+// ── Brand colours ─────────────────────────────────────────────────────────────
+const C = {
+  navy:   '#242C4F',
+  blue:   '#45658D',
+  gold:   '#ffffff',
+  red:    '#ef4444',
+  amber:  '#f59e0b',
+  green:  '#10b981',
+  slate:  '#f8fafc',
+  border: '#e2e8f0',
+  text:   '#334155',
+  muted:  '#64748b',
+};
+
+// ── BE-FAST symptom labels ────────────────────────────────────────────────────
+const BEFAST_LABELS: Record<string, string> = {
+  equilibrio: 'Pérdida de equilibrio / mareo intenso',
+  vision:     'Pérdida de visión (un ojo o doble/borroso)',
+  cara:       'Asimetría facial (un lado de la cara caído)',
+  brazos:     'Debilidad en brazos',
+  habla:      'Dificultad para hablar',
+};
+
+function formatSymptoms(symptoms: string[]): string {
+  const positive = symptoms.filter(s => !s.endsWith(':no'));
+  const negative = symptoms.filter(s => s.endsWith(':no'));
+  const rows = [
+    ...positive.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.red};font-weight:700">✓</span> <span style="font-weight:600;color:${C.red}">${BEFAST_LABELS[s] ?? s}</span></td></tr>`),
+    ...negative.map(s => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.border}"><span style="display:inline-block;width:20px;text-align:center;color:${C.muted}">✗</span> <span style="color:${C.muted}">${BEFAST_LABELS[s.slice(0, -3)] ?? s.slice(0, -3)}</span></td></tr>`),
+  ];
+  return `<table style="width:100%;border-collapse:collapse">${rows.join('')}</table>`;
+}
+
+// ── Shared email chrome ───────────────────────────────────────────────────────
+function emailHeader(bannerBg: string, bannerText: string, bannerSub: string) {
+  return `
+    <div style="background:${C.navy};padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+      ${LOGO_DATA_URI ? `<img src="${LOGO_DATA_URI}" alt="Ministerio de Salud" style="height:44px;object-fit:contain;flex-shrink:0" />` : '<span style="color:#fff;font-weight:700;font-size:13px">Ministerio de Salud</span>'}
+      <span style="color:${C.gold};font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-align:right">Sistema de Gestión de ACV</span>
+    </div>
+    <div style="background:${bannerBg};padding:22px 24px;text-align:center">
+      <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:-0.3px">${bannerText}</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,0.88);font-size:14px">${bannerSub}</p>
+    </div>`;
+}
+
+function patientTable(p: any): string {
+  const row = (label: string, value: string, highlight = false) =>
+    `<tr>
+      <td style="padding:9px 12px;border-bottom:1px solid ${C.border};width:38%;color:${C.muted};font-size:13px;font-weight:500">${label}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid ${C.border};font-weight:600;font-size:13px;color:${highlight ? C.red : C.navy}">${value || '—'}</td>
+    </tr>`;
+  const coverage = p.hasCoverage != null ? (p.hasCoverage ? 'Sí' : 'No') : (p.coverage || '—');
+  return `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;border:1px solid ${C.border}">
+    ${row('Nombre', p.name)}
+    ${row('DNI', p.id)}
+    ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
+    ${row('Cobertura médica', coverage)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Contacto', p.contactInfo)}
+  </table>`;
+}
+
+const EMAIL_FOOTER = `
+  <div style="background:${C.navy};padding:14px 24px;text-align:center">
+    <p style="margin:0;color:${C.gold};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Ministerio de Salud · República Argentina</p>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.5);font-size:11px">Mensaje automático – Sistema de Gestión de ACV. No responder a este correo.</p>
+  </div>`;
 
 const app = express();
 app.use(express.json());
@@ -12,15 +90,20 @@ app.use(express.json());
 const PORT = 3000;
 
 // Configure Nodemailer
-const transporter = nodemailer.createTransport({
+const smtpConfig = {
   host: process.env.EMAIL_HOST,
   port: Number(process.env.EMAIL_PORT),
   secure: process.env.EMAIL_SECURE === 'true',
+  requireTLS: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-});
+  tls: { rejectUnauthorized: false },
+};
+console.log('[SMTP] config (no password):', { ...smtpConfig, auth: { user: smtpConfig.auth.user } });
+const transporter = nodemailer.createTransport(smtpConfig);
+transporter.verify().then(() => console.log('[SMTP] verify OK')).catch((err: any) => console.error('[SMTP] verify FAILED:', err.message, err.code, err.response));
 
 // Haversine formula
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -75,25 +158,11 @@ function getClosestHospitalByHaversine(patientLat: number, patientLng: number, h
   return { hospital: closestHospital, etaText: null, etaSeconds: null };
 }
 
-function buildPatientTableRows(patientData: any) {
-  const row = (label: string, val: string, color = '#0f172a') =>
-    `<tr><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:40%;color:#64748b;font-weight:500">${label}</td><td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:${color}">${val}</td></tr>`;
-  return [
-    row('Nombre', patientData.name || 'N/A'),
-    row('DNI', patientData.id || 'N/A'),
-    row('Edad / Sexo', `${patientData.age || 'N/A'} / ${patientData.sex || 'N/A'}`),
-    row('Cobertura', patientData.coverage || 'N/A'),
-    row('Inicio de Síntomas', patientData.symptomOnsetTime || 'N/A', '#ef4444'),
-    row('Contacto', patientData.contactInfo || 'N/A'),
-  ].join('');
-}
-
-const EMAIL_FOOTER = `<div style="background-color:#f1f5f9;padding:16px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0">Este es un mensaje automático del Sistema de Gestión de ACV. Por favor, no responda a este correo.</div>`;
 
 const NOTIFICATION_RECIPIENTS = [
-  { role: 'DINESA', email: 'santiago.bianucci@sumardigital.com.ar', cc: 'rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'santiago.bianucci@sumardigital.com.ar', cc: 'rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke', email: 'santiago.bianucci@sumardigital.com.ar', cc: 'rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'DINESA', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
+  { role: 'Centro Stroke', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
 ];
 const processedActions = new Map<string, number>();
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -144,7 +213,7 @@ function isDuplicateAction(actionKey: string) {
   return false;
 }
 
-type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route';
+type MapsAction = 'geocode-place-id' | 'geocode-address' | 'reverse-geocode' | 'route' | 'autocomplete';
 
 function getServerMapsApiKey() {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -200,6 +269,24 @@ app.post('/api/maps', async (req, res) => {
       return res.status(response.ok ? 200 : 500).json(data);
     }
 
+    if (action === 'autocomplete') {
+      const input = req.body?.input;
+      if (!input) return res.status(400).json({ error: 'Missing input' });
+
+      const lat = req.body?.lat;
+      const lng = req.body?.lng;
+
+      let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&components=country:ar&language=es&key=${apiKey}`;
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        url += `&location=${lat},${lng}&radius=50000`;
+      }
+
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log('[autocomplete] status:', data.status, data.error_message || '');
+      return res.status(response.ok ? 200 : 500).json(data);
+    }
+
     if (action === 'route') {
       const origin = req.body?.origin;
       const destination = req.body?.destination;
@@ -234,6 +321,7 @@ app.post('/api/maps', async (req, res) => {
         body: JSON.stringify(requestBody)
       });
       const data = await response.json();
+      if (!response.ok) console.log('[route] error:', JSON.stringify(data));
       return res.status(response.ok ? 200 : 500).json(data);
     }
 
@@ -252,37 +340,31 @@ app.post("/api/submit-acv", async (req, res) => {
   const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
 
   const emailContent = `
-    <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-      <div style="background-color:#ef4444;padding:20px;color:white;text-align:center">
-        <h1 style="margin:0;font-size:24px;font-weight:600">ALERTA: CÓDIGO ACV - PRE ASIGNADO</h1>
-        <p style="margin:8px 0 0 0;font-size:16px;opacity:0.9">Destino Pre-asignado: <strong>${preAssignedHospital}${etaDisplay}</strong></p>
-      </div>
-      <div style="padding:24px;background-color:#f8fafc">
-        <h2 style="margin-top:0;color:#0f172a;font-size:18px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-        <table style="width:100%;border-collapse:collapse;margin-top:16px">${buildPatientTableRows(patientData)}</table>
-        <h3 style="margin-top:24px;color:#0f172a;font-size:16px">Síntomas Detectados</h3>
-        <ul style="margin-top:8px;padding-left:20px;color:#0f172a">${(patientData.symptoms || []).map((s: string) => `<li style="margin-bottom:4px">${s}</li>`).join('')}</ul>
-        <h3 style="margin-top:24px;color:#0f172a;font-size:16px">Ubicación del Evento</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#e2e8f0;padding:12px;border-radius:6px">${patientData.location?.address || 'N/A'}</p>
-        ${patientData.clinicalObservations ? `<h3 style="margin-top:24px;color:#0f172a;font-size:16px">Observaciones Clínicas</h3><p style="margin-top:8px;color:#0f172a;background-color:#f1f5f9;padding:12px;border-radius:6px;border-left:4px solid #94a3b8">${patientData.clinicalObservations}</p>` : ''}
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+      ${emailHeader(C.red, '🚨 ALERTA: CÓDIGO ACV – PRE ASIGNADO', `Destino sugerido: <strong>${preAssignedHospital}${etaDisplay}</strong>`)}
+      <div style="padding:24px;background:${C.slate}">
+        <p style="margin:0 0 16px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+        ${patientTable(patientData)}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Síntomas BE-FAST</p>
+        ${formatSymptoms(patientData.symptoms || [])}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData.location?.address || '—'}</div>
+        ${patientData.clinicalObservations ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Observaciones Clínicas</p><div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.text}">${patientData.clinicalObservations}</div>` : ''}
       </div>
       ${EMAIL_FOOTER}
     </div>`;
 
-  try {
-    const distribution = getDistributionList();
-    await transporter.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
-      to: distribution.to,
-      cc: distribution.cc || undefined,
-      subject: `[ALERTA] Nuevo Código ACV - ${preAssignedHospital}`,
-      html: emailContent,
-    });
-    res.json({ success: true, status: 'PRE_ASSIGNED', preAssignedHospitalId, etaText, etaSeconds });
-  } catch (error) {
-    console.error("Error sending emails:", error);
-    res.status(500).json({ success: false, error: "Error sending emails" });
-  }
+  const distribution = getDistributionList();
+  transporter.sendMail({
+    from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+    to: distribution.to,
+    cc: distribution.cc || undefined,
+    subject: `[ALERTA] Nuevo Código ACV - ${preAssignedHospital}`,
+    html: emailContent,
+  }).then(info => console.log(`[submit-acv] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+    .catch((err: any) => console.error('[submit-acv] sendMail FAILED:', err.message, err.code, err.response));
+
+  res.json({ success: true, status: 'PENDING_ASSIGNMENT', preAssignedHospitalId, etaText, etaSeconds });
 });
 
 app.post('/api/confirm-hospital', async (req, res) => {
@@ -298,41 +380,39 @@ app.post('/api/confirm-hospital', async (req, res) => {
   const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
 
   const html = `
-    <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-      <div style="background-color:#10b981;padding:24px;color:white;text-align:center">
-        <h1 style="margin:0;font-size:22px;font-weight:700">✔ DERIVACIÓN CONFIRMADA – CÓDIGO ACV</h1>
-        <p style="margin:10px 0 0 0;font-size:15px;opacity:0.9">Hospital de destino: <strong>${hospitalName}${etaDisplay}</strong></p>
-      </div>
-      <div style="padding:24px;background-color:#f8fafc">
-        <div style="background-color:#d1fae5;border:1px solid #a7f3d0;border-radius:6px;padding:14px 18px;margin-bottom:20px">
-          <p style="margin:0;color:#065f46;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#047857;font-size:13px">Coordinación del Centro Stroke ha confirmado la derivación del paciente a <strong>${hospitalName}</strong>.<br/>El hospital destino debe preparar el equipo de stroke para la recepción.</p>
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+      ${emailHeader(C.green, '✔ DERIVACIÓN CONFIRMADA – CÓDIGO ACV', `Hospital destino: <strong>${hospitalName}${etaDisplay}</strong>`)}
+      <div style="padding:24px;background:${C.slate}">
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.green};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+          <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
+          <p style="margin:6px 0 0;font-size:13px;color:${C.text}">Activar equipo de stroke para recepción del paciente en <strong>${hospitalName}</strong>.</p>
         </div>
-        <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-        <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>
-        ${patientData.symptoms?.length ? `<h3 style="margin-top:22px;color:#0f172a;font-size:15px">Síntomas Detectados</h3><ul style="margin-top:8px;padding-left:20px;color:#0f172a">${patientData.symptoms.map((s: string) => `<li style="margin-bottom:4px">${s}</li>`).join('')}</ul>` : ''}
-        <h3 style="margin-top:22px;color:#0f172a;font-size:15px">Ubicación del Evento</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#e2e8f0;padding:12px;border-radius:6px">${patientData.location?.address || 'N/A'}</p>
-        <h3 style="margin-top:22px;color:#0f172a;font-size:15px">Hospital Confirmado</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#d1fae5;padding:12px;border-radius:6px;border-left:4px solid #10b981"><strong>${hospitalName}</strong><br/><span style="font-size:13px;color:#374151">${hospitalAddress}</span></p>
+        <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+        ${patientTable(patientData)}
+        ${patientData.symptoms?.length ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Síntomas BE-FAST</p>${formatSymptoms(patientData.symptoms)}` : ''}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Hospital Confirmado</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.green};border-radius:6px;padding:12px 16px">
+          <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${hospitalName}</p>
+          <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${hospitalAddress}</p>
+        </div>
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData.location?.address || '—'}</div>
       </div>
       ${EMAIL_FOOTER}
     </div>`;
 
-  try {
-    const distribution = getDistributionList();
-    await transporter.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
-      to: distribution.to,
-      cc: distribution.cc || undefined,
-      subject: `[CONFIRMACIÓN] Código ACV ${caseId} – Derivación confirmada: ${hospitalName}`,
-      html,
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending confirmation email:', error);
-    res.status(500).json({ success: false, error: 'Error sending confirmation email' });
-  }
+  const distribution = getDistributionList();
+  transporter.sendMail({
+    from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+    to: distribution.to,
+    cc: distribution.cc || undefined,
+    subject: `[CONFIRMACIÓN] Código ACV ${caseId} – Derivación confirmada: ${hospitalName}`,
+    html,
+  }).then(info => console.log(`[confirm-hospital] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+    .catch((err: any) => console.error('[confirm-hospital] sendMail FAILED:', err.message, err.code, err.response));
+
+  res.json({ success: true });
 });
 
 app.post('/api/reassign-hospital', async (req, res) => {
@@ -350,72 +430,111 @@ app.post('/api/reassign-hospital', async (req, res) => {
   const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
 
   const cancellationHtml = `
-    <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-      <div style="background-color:#f59e0b;padding:24px;color:white;text-align:center">
-        <h1 style="margin:0;font-size:22px;font-weight:700">⚠ CANCELACIÓN DE DERIVACIÓN – CÓDIGO ACV</h1>
-        <p style="margin:10px 0 0 0;font-size:15px;opacity:0.95">Hospital cancelado: <strong>${cancelledName}</strong></p>
-      </div>
-      <div style="padding:24px;background-color:#f8fafc">
-        <div style="background-color:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:14px 18px;margin-bottom:20px">
-          <p style="margin:0;color:#92400e;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#b45309;font-size:13px">La derivación del paciente a <strong>${cancelledName}</strong> ha sido <strong>cancelada</strong> por decisión operativa de Coordinación del Centro Stroke.<br/>El paciente ha sido redirigido a otro centro asistencial.</p>
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+      ${emailHeader(C.amber, '⚠ REASIGNACIÓN – CÓDIGO ACV', `Derivación a <strong>${cancelledName}</strong> cancelada`)}
+      <div style="padding:24px;background:${C.slate}">
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.amber};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+          <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
+          <p style="margin:6px 0 0;font-size:13px;color:${C.text}">La derivación a <strong>${cancelledName}</strong> fue cancelada. Paciente redirigido a <strong>${newHospitalName}</strong>.</p>
         </div>
-        <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-        <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>
-        <h3 style="margin-top:22px;color:#0f172a;font-size:15px">Ubicación del Evento</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#e2e8f0;padding:12px;border-radius:6px">${patientData.location?.address || 'N/A'}</p>
-        <div style="margin-top:22px;background-color:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:14px 18px">
-          <p style="margin:0;color:#9a3412;font-size:13px;font-weight:600">Centro de destino final: ${newHospitalName}</p>
-          <p style="margin:4px 0 0 0;color:#c2410c;font-size:12px">Para consultas operativas, contactar a Coordinación del Centro Stroke.</p>
+        <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+        ${patientTable(patientData)}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData.location?.address || '—'}</div>
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Nuevo Destino</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px">
+          <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${newHospitalName}</p>
+          <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${newHospitalAddress}</p>
         </div>
       </div>
       ${EMAIL_FOOTER}
     </div>`;
 
   const newAssignmentHtml = `
-    <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:680px;margin:0 auto;color:#334155;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-      <div style="background-color:#ef4444;padding:24px;color:white;text-align:center">
-        <h1 style="margin:0;font-size:22px;font-weight:700">🚨 ALERTA: CÓDIGO ACV – DERIVACIÓN CONFIRMADA</h1>
-        <p style="margin:10px 0 0 0;font-size:15px;opacity:0.9">Hospital de destino: <strong>${newHospitalName}${etaDisplay}</strong></p>
-      </div>
-      <div style="padding:24px;background-color:#f8fafc">
-        <div style="background-color:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:14px 18px;margin-bottom:20px">
-          <p style="margin:0;color:#7f1d1d;font-weight:600;font-size:14px">📋 Caso: ${caseId}</p>
-          <p style="margin:6px 0 0 0;color:#991b1b;font-size:13px">Coordinación del Centro Stroke ha confirmado la derivación de un paciente con <strong>Código ACV</strong> a su institución.<br/>Se solicita activación inmediata del equipo de stroke y preparación de guardia neurológica.</p>
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+      ${emailHeader(C.navy, '🚨 ALERTA: CÓDIGO ACV – REASIGNACIÓN', `Nuevo destino: <strong>${newHospitalName}${etaDisplay}</strong>`)}
+      <div style="padding:24px;background:${C.slate}">
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.red};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+          <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Caso</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${C.navy}">${caseId}</p>
+          <p style="margin:6px 0 0;font-size:13px;color:${C.text}">Reasignación confirmada. Activar equipo de stroke para recepción en <strong>${newHospitalName}</strong>.</p>
         </div>
-        <h2 style="margin-top:0;color:#0f172a;font-size:17px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">Información del Paciente</h2>
-        <table style="width:100%;border-collapse:collapse;margin-top:12px">${buildPatientTableRows(patientData)}</table>
-        ${patientData.symptoms?.length ? `<h3 style="margin-top:22px;color:#0f172a;font-size:15px">Síntomas Detectados</h3><ul style="margin-top:8px;padding-left:20px;color:#0f172a">${patientData.symptoms.map((s: string) => `<li style="margin-bottom:4px">${s}</li>`).join('')}</ul>` : ''}
-        <h3 style="margin-top:22px;color:#0f172a;font-size:15px">Ubicación del Evento</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#e2e8f0;padding:12px;border-radius:6px">${patientData.location?.address || 'N/A'}</p>
-        ${patientData.clinicalObservations ? `<h3 style="margin-top:22px;color:#0f172a;font-size:15px">Observaciones Clínicas</h3><p style="margin-top:8px;color:#0f172a;background-color:#f1f5f9;padding:12px;border-radius:6px;border-left:4px solid #94a3b8">${patientData.clinicalObservations}</p>` : ''}
-        <h3 style="margin-top:22px;color:#0f172a;font-size:15px">Hospital Confirmado como Destino</h3>
-        <p style="margin-top:8px;color:#0f172a;background-color:#fee2e2;padding:12px;border-radius:6px;border-left:4px solid #ef4444"><strong>${newHospitalName}</strong><br/><span style="font-size:13px;color:#374151">${newHospitalAddress}</span></p>
+        <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+        ${patientTable(patientData)}
+        ${patientData.symptoms?.length ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Síntomas BE-FAST</p>${formatSymptoms(patientData.symptoms)}` : ''}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Hospital Destino</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px">
+          <p style="margin:0;font-weight:700;font-size:14px;color:${C.navy}">${newHospitalName}</p>
+          <p style="margin:4px 0 0;font-size:13px;color:${C.muted}">${newHospitalAddress}</p>
+        </div>
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData.location?.address || '—'}</div>
+        ${patientData.clinicalObservations ? `<p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Observaciones Clínicas</p><div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.text}">${patientData.clinicalObservations}</div>` : ''}
       </div>
       ${EMAIL_FOOTER}
     </div>`;
 
-  try {
-    const distribution = getDistributionList();
-    await transporter.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
-      to: distribution.to,
-      cc: distribution.cc || undefined,
-      subject: `[CANCELACIÓN] Código ACV ${caseId} – Derivación cancelada para ${cancelledName}`,
-      html: cancellationHtml,
-    });
-    await transporter.sendMail({
-      from: '"Sistema ACV" <no-reply@sumardigital.com.ar>',
-      to: distribution.to,
-      cc: distribution.cc || undefined,
-      subject: `[DERIVACIÓN] Código ACV ${caseId} – Paciente en camino a ${newHospitalName}`,
-      html: newAssignmentHtml,
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending reassignment emails:', error);
-    res.status(500).json({ success: false, error: 'Error sending reassignment emails' });
-  }
+  const distribution = getDistributionList();
+  transporter.sendMail({
+    from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+    to: distribution.to,
+    cc: distribution.cc || undefined,
+    subject: `[CANCELACIÓN] Código ACV ${caseId} – Derivación cancelada para ${cancelledName}`,
+    html: cancellationHtml,
+  }).then(info => console.log(`[reassign-hospital] cancel sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+    .catch((err: any) => console.error('[reassign-hospital] cancel sendMail FAILED:', err.message, err.code, err.response));
+
+  transporter.sendMail({
+    from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+    to: distribution.to,
+    cc: distribution.cc || undefined,
+    subject: `[DERIVACIÓN] Código ACV ${caseId} – Paciente en camino a ${newHospitalName}`,
+    html: newAssignmentHtml,
+  }).then(info => console.log(`[reassign-hospital] assign sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+    .catch((err: any) => console.error('[reassign-hospital] assign sendMail FAILED:', err.message, err.code, err.response));
+
+  res.json({ success: true });
+});
+
+app.post('/api/cancel-case', async (req, res) => {
+  const { caseId, patientData, assignedHospitalId, observation, cancelledBy } = req.body;
+  const assignedHospital = assignedHospitalId ? mockHospitals.find(h => h.id === assignedHospitalId) : null;
+  const assignedName = assignedHospital?.name ?? 'No asignado';
+  const responsibleParty = cancelledBy ?? 'Usuario del sistema';
+
+  const html = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;color:${C.text};border:1px solid ${C.border};border-radius:10px;overflow:hidden">
+      ${emailHeader(C.red, '✖ CASO ACV CANCELADO', `Caso: <strong>${caseId}</strong>`)}
+      <div style="padding:24px;background:${C.slate}">
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.red};border-radius:6px;padding:12px 16px;margin-bottom:14px">
+          <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Cancelado por</p>
+          <p style="margin:4px 0 0;font-size:14px;font-weight:700;color:${C.navy}">${responsibleParty}</p>
+        </div>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.amber};border-radius:6px;padding:12px 16px;margin-bottom:20px">
+          <p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Motivo</p>
+          <p style="margin:4px 0 0;font-size:13px;color:${C.text}">${observation || 'Sin observaciones'}</p>
+        </div>
+        ${assignedHospital ? `<div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.blue};border-radius:6px;padding:12px 16px;margin-bottom:20px"><p style="margin:0;font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Hospital al momento de cancelación</p><p style="margin:4px 0 0;font-size:14px;font-weight:700;color:${C.navy}">${assignedName}</p></div>` : ''}
+        <p style="margin:0 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Información del Paciente</p>
+        ${patientTable(patientData || {})}
+        <p style="margin:20px 0 10px;font-size:13px;color:${C.muted};font-weight:600;text-transform:uppercase;letter-spacing:1px">Ubicación del Evento</p>
+        <div style="background:#fff;border:1px solid ${C.border};border-left:4px solid ${C.navy};border-radius:6px;padding:12px 16px;font-size:13px;color:${C.navy};font-weight:600">${patientData?.location?.address || '—'}</div>
+      </div>
+      ${EMAIL_FOOTER}
+    </div>`;
+
+  const distribution = getDistributionList();
+  transporter.sendMail({
+    from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+    to: distribution.to,
+    cc: distribution.cc || undefined,
+    subject: `[CANCELACIÓN] Código ACV ${caseId} – Cancelado por ${responsibleParty}`,
+    html,
+  }).then(info => console.log(`[cancel-case] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+    .catch((err: any) => console.error('[cancel-case] sendMail FAILED:', err.message, err.code, err.response));
+
+  res.json({ success: true });
 });
 
 async function startServer() {
