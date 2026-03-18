@@ -73,7 +73,7 @@ function patientTable(p: any): string {
     ${row('DNI', p.id)}
     ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
     ${row('Cobertura médica', coverage)}
-    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime || '00:00', true)}
     ${row('Contacto', p.contactInfo)}
   </table>`;
 }
@@ -106,42 +106,22 @@ const transporter = nodemailer.createTransport(smtpConfig);
 transporter.verify().then(() => console.log('[SMTP] verify OK')).catch((err: any) => console.error('[SMTP] verify FAILED:', err.message, err.code, err.response));
 
 
-const NOTIFICATION_RECIPIENTS = [
-  { role: 'DINESA', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
-const processedActions = new Map<string, number>();
-const IDEMPOTENCY_WINDOW_MS = 60_000;
+const BCC_LIST = 'harry.yang@sumardigital.com.ar,santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar';
 
-function parseEmails(value?: string) {
-  if (!value) return [] as string[];
-  return value
-    .split(',')
-    .map((email) => email.trim())
-    .filter(Boolean);
-}
-
-function getDistributionList() {
-  const toSet = new Set<string>();
-  const ccSet = new Set<string>();
-
-  for (const recipient of NOTIFICATION_RECIPIENTS) {
-    if (recipient.email) toSet.add(recipient.email);
-    for (const ccEmail of parseEmails(recipient.cc)) {
-      ccSet.add(ccEmail);
+function getDistributionList(assignedHospital?: { isStrokeCenter: boolean } | null) {
+  const to: string[] = ['cvillagran@msal.gov.ar']; // Centro Coordinador Nacional (DINESA)
+  if (assignedHospital) {
+    if (assignedHospital.isStrokeCenter) {
+      to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
+    } else {
+      to.push('lgaggino@msal.gov.ar'); // Centro Operativo Local
     }
   }
-
-  for (const toEmail of toSet) {
-    ccSet.delete(toEmail);
-  }
-
-  return {
-    to: Array.from(toSet).join(','),
-    cc: Array.from(ccSet).join(','),
-  };
+  return { to: to.join(','), bcc: BCC_LIST };
 }
+
+const processedActions = new Map<string, number>();
+const IDEMPOTENCY_WINDOW_MS = 60_000;
 
 function isDuplicateAction(actionKey: string) {
   const now = Date.now();
@@ -301,11 +281,11 @@ app.post("/api/submit-acv", async (req, res) => {
       ${EMAIL_FOOTER}
     </div>`;
 
-  const distribution = getDistributionList();
+  const distribution = getDistributionList(closestHospital);
   transporter.sendMail({
     from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
     to: distribution.to,
-    cc: distribution.cc || undefined,
+    bcc: distribution.bcc || undefined,
     subject: `[ALERTA] Nuevo Código ACV - ${preAssignedHospital}`,
     html: emailContent,
   }).then(info => console.log(`[submit-acv] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
@@ -349,11 +329,11 @@ app.post('/api/confirm-hospital', async (req, res) => {
       ${EMAIL_FOOTER}
     </div>`;
 
-  const distribution = getDistributionList();
+  const distribution = getDistributionList(confirmed);
   transporter.sendMail({
     from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
     to: distribution.to,
-    cc: distribution.cc || undefined,
+    bcc: distribution.bcc || undefined,
     subject: `[CONFIRMACIÓN] Código ACV ${caseId} – Derivación confirmada: ${hospitalName}`,
     html,
   }).then(info => console.log(`[confirm-hospital] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
@@ -422,11 +402,12 @@ app.post('/api/reassign-hospital', async (req, res) => {
       ${EMAIL_FOOTER}
     </div>`;
 
-  const distribution = getDistributionList();
+  const cancelDist = getDistributionList(cancelledHospital);
+  const assignDist = getDistributionList(newHospital);
   transporter.sendMail({
     from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
-    to: distribution.to,
-    cc: distribution.cc || undefined,
+    to: cancelDist.to,
+    bcc: cancelDist.bcc || undefined,
     subject: `[CANCELACIÓN] Código ACV ${caseId} – Derivación cancelada para ${cancelledName}`,
     html: cancellationHtml,
   }).then(info => console.log(`[reassign-hospital] cancel sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
@@ -434,8 +415,8 @@ app.post('/api/reassign-hospital', async (req, res) => {
 
   transporter.sendMail({
     from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
-    to: distribution.to,
-    cc: distribution.cc || undefined,
+    to: assignDist.to,
+    bcc: assignDist.bcc || undefined,
     subject: `[DERIVACIÓN] Código ACV ${caseId} – Paciente en camino a ${newHospitalName}`,
     html: newAssignmentHtml,
   }).then(info => console.log(`[reassign-hospital] assign sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
@@ -471,11 +452,11 @@ app.post('/api/cancel-case', async (req, res) => {
       ${EMAIL_FOOTER}
     </div>`;
 
-  const distribution = getDistributionList();
+  const distribution = getDistributionList(assignedHospital);
   transporter.sendMail({
     from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
     to: distribution.to,
-    cc: distribution.cc || undefined,
+    bcc: distribution.bcc || undefined,
     subject: `[CANCELACIÓN] Código ACV ${caseId} – Cancelado por ${responsibleParty}`,
     html,
   }).then(info => console.log(`[cancel-case] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))

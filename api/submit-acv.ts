@@ -19,22 +19,19 @@ const hospitals: Hospital[] = [
 
 
 
-// Testing: all emails go to harry.yang@sumardigital.com.ar
-const RECIPIENTS = [
-  { role: 'DINESA',                  email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke',           email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
+const BCC_LIST = 'harry.yang@sumardigital.com.ar,santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar';
 
-
-
-/*
-const RECIPIENTS = [
-  { role: 'DINESA', email: 'marzumendi@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke', email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
-*/
+function getDistributionList(assignedHospital?: Hospital | null) {
+  const to: string[] = ['cvillagran@msal.gov.ar']; // Centro Coordinador Nacional (DINESA)
+  if (assignedHospital) {
+    if (assignedHospital.isStrokeCenter) {
+      to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
+    } else {
+      to.push('lgaggino@msal.gov.ar'); // Centro Operativo Local
+    }
+  }
+  return { to: to.join(','), bcc: BCC_LIST };
+}
 
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
@@ -97,7 +94,7 @@ function patientTable(p: any): string {
     ${row('DNI', p.id)}
     ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
     ${row('Cobertura médica', coverage)}
-    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime || '00:00', true)}
     ${row('Contacto', p.contactInfo)}
   </table>`;
 }
@@ -165,15 +162,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[submit-acv] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
     }
 
-    await Promise.allSettled(RECIPIENTS.map(r =>
-      transport.sendMail({
-        from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
-        to: r.email, bcc: r.bcc,
-        subject: `[${r.role}] Nuevo Código ACV – ${name}`,
-        html,
-      }).then(info => console.log(`[submit-acv] sendMail to ${r.role} (${r.email}) OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
-        .catch((mailErr: any) => console.error(`[submit-acv] sendMail to ${r.role} (${r.email}) FAILED:`, mailErr.message, mailErr.code, mailErr.response))
-    ));
+    const distribution = getDistributionList(hospital);
+    await transport.sendMail({
+      from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
+      to: distribution.to,
+      bcc: distribution.bcc,
+      subject: `[ALERTA] Nuevo Código ACV – ${name}`,
+      html,
+    }).then(info => console.log(`[submit-acv] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
+      .catch((mailErr: any) => console.error('[submit-acv] sendMail FAILED:', mailErr.message, mailErr.code, mailErr.response));
 
     const status = hospital ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT';
     return res.status(200).json({ success: true, status, preAssignedHospitalId: hospital?.id ?? null, etaText });

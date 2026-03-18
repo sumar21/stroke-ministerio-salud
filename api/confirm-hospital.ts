@@ -14,21 +14,19 @@ const hospitals: Hospital[] = [
 ];
 
 
-// Testing: all emails go to harry.yang@sumardigital.com.ar
-const RECIPIENTS = [
-  { role: 'DINESA',                  email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke',           email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
+const BCC_LIST = 'harry.yang@sumardigital.com.ar,santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar';
 
-/*
-// Prod recipients
-const RECIPIENTS = [
-  { role: 'DINESA',                  email: 'marzumendi@msal.gov.ar',  bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar',    bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke',           email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
-*/
+function getDistributionList(assignedHospital?: Hospital | null) {
+  const to: string[] = ['cvillagran@msal.gov.ar']; // Centro Coordinador Nacional (DINESA)
+  if (assignedHospital) {
+    if (assignedHospital.isStrokeCenter) {
+      to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
+    } else {
+      to.push('lgaggino@msal.gov.ar'); // Centro Operativo Local
+    }
+  }
+  return { to: to.join(','), bcc: BCC_LIST };
+}
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const C = {
@@ -90,7 +88,7 @@ function patientTable(p: any): string {
     ${row('DNI', p.id)}
     ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
     ${row('Cobertura médica', coverage)}
-    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime || '00:00', true)}
     ${row('Contacto', p.contactInfo)}
   </table>`;
 }
@@ -104,34 +102,6 @@ const EMAIL_FOOTER_HTML = `
 const processedConfirmActions = new Map<string, number>();
 const IDEMPOTENCY_WINDOW_MS = 60_000;
 
-function parseEmails(value?: string) {
-  if (!value) return [] as string[];
-  return value
-    .split(',')
-    .map((email) => email.trim())
-    .filter(Boolean);
-}
-
-function getDistributionList() {
-  const toSet = new Set<string>();
-  const bccSet = new Set<string>();
-
-  for (const recipient of RECIPIENTS) {
-    if (recipient.email) toSet.add(recipient.email);
-    for (const bccEmail of parseEmails(recipient.bcc)) {
-      bccSet.add(bccEmail);
-    }
-  }
-
-  for (const toEmail of toSet) {
-    bccSet.delete(toEmail);
-  }
-
-  return {
-    to: Array.from(toSet).join(','),
-    bcc: Array.from(bccSet).join(','),
-  };
-}
 
 function isDuplicateAction(actionKey: string) {
   const now = Date.now();
@@ -219,7 +189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[confirm-hospital] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
     }
 
-    const distribution = getDistributionList();
+    const distribution = getDistributionList(confirmed);
 
     await transport.sendMail({
       from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,

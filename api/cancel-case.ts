@@ -13,21 +13,19 @@ const hospitals: Hospital[] = [
   { id: 'h4', name: 'Sanatorio Berazategui', isStrokeCenter: false, strokeCenterId: 'h1', location: { lat: -34.765556, lng: -58.216166, address: 'Av. 14 4123, Berazategui' } },
 ];
 
-// Testing: all emails go to harry.yang@sumardigital.com.ar
-const RECIPIENTS = [
-  { role: 'DINESA',                  email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke',           email: 'harry.yang@sumardigital.com.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
+const BCC_LIST = 'harry.yang@sumardigital.com.ar,santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar';
 
-/*
-// Prod recipients
-const RECIPIENTS = [
-  { role: 'DINESA',                  email: 'marzumendi@msal.gov.ar',  bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Coordinador SAME', email: 'lgaggino@msal.gov.ar',    bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-  { role: 'Centro Stroke',           email: 'dmassaragian@msal.gov.ar', bcc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
-];
-*/
+function getDistributionList(assignedHospital?: Hospital | null) {
+  const to: string[] = ['cvillagran@msal.gov.ar']; // Centro Coordinador Nacional (DINESA)
+  if (assignedHospital) {
+    if (assignedHospital.isStrokeCenter) {
+      to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
+    } else {
+      to.push('lgaggino@msal.gov.ar'); // Centro Operativo Local
+    }
+  }
+  return { to: to.join(','), bcc: BCC_LIST };
+}
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const C = {
@@ -70,7 +68,7 @@ function patientTable(p: any): string {
     ${row('DNI', p.id)}
     ${row('Edad / Sexo', `${p.age ?? '—'} años / ${p.sex ?? '—'}`)}
     ${row('Cobertura médica', coverage)}
-    ${row('Inicio de síntomas', p.symptomOnsetTime, true)}
+    ${row('Inicio de síntomas', p.symptomOnsetTime || '00:00', true)}
     ${row('Contacto', p.contactInfo)}
   </table>`;
 }
@@ -81,21 +79,6 @@ const EMAIL_FOOTER_HTML = `
     <p style="margin:6px 0 0;color:rgba(255,255,255,0.5);font-size:11px">Mensaje automático – Sistema de Gestión de ACV. No responder a este correo.</p>
   </div>`;
 
-function parseEmails(value?: string) {
-  if (!value) return [] as string[];
-  return value.split(',').map(e => e.trim()).filter(Boolean);
-}
-
-function getDistributionList() {
-  const toSet = new Set<string>();
-  const bccSet = new Set<string>();
-  for (const rec of RECIPIENTS) {
-    if (rec.email) toSet.add(rec.email);
-    for (const b of parseEmails(rec.bcc)) bccSet.add(b);
-  }
-  for (const t of toSet) bccSet.delete(t);
-  return { to: Array.from(toSet).join(','), bcc: Array.from(bccSet).join(',') };
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -154,7 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[cancel-case] SMTP verify FAILED:', verifyErr.message, verifyErr.code, verifyErr.response);
     }
 
-    const distribution = getDistributionList();
+    const distribution = getDistributionList(assignedHospital);
 
     await transport.sendMail({
       from: `"Sistema ACV" <${process.env.EMAIL_USER}>`,
