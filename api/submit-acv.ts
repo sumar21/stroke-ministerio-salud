@@ -36,22 +36,6 @@ const RECIPIENTS = [
 ];
 */
 
-async function closestByETA(lat: number, lng: number, list: Hospital[]) {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) return { hospital: null, etaText: null, etaSeconds: null };
-  try {
-    const origins = `${lat},${lng}`;
-    const dests = list.map(h => `${h.location.lat},${h.location.lng}`).join('|');
-    const r = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origins}&destinations=${dests}&key=${key}`);
-    const d = await r.json();
-    if (d.status === 'OK' && d.rows?.[0]?.elements) {
-      let mi = Infinity, idx = -1;
-      d.rows[0].elements.forEach((el: any, i: number) => { if (el.status === 'OK' && el.duration.value < mi) { mi = el.duration.value; idx = i; } });
-      if (idx !== -1) return { hospital: list[idx], etaText: d.rows[0].elements[idx].duration.text, etaSeconds: d.rows[0].elements[idx].duration.value };
-    }
-  } catch (e) { console.error('Google Maps error:', e); }
-  return { hospital: null, etaText: null, etaSeconds: null };
-}
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const C = {
@@ -140,8 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Missing patient location data', receivedBody: typeof req.body, bodyKeys: body ? Object.keys(body) : 'null' });
     }
 
-    const strokeCenters = hospitals.filter(h => h.isStrokeCenter);
-    const { hospital, etaText, etaSeconds } = await closestByETA(body.location.lat, body.location.lng, strokeCenters);
+    const preAssignedHospitalId: string | null = body.preAssignedHospitalId ?? null;
+    const etaText: string | null = body.etaText ?? null;
+    const hospital = preAssignedHospitalId ? hospitals.find(h => h.id === preAssignedHospitalId) ?? null : null;
 
     const name = hospital ? hospital.name : 'A confirmar por DINESA';
     const eta = etaText ? ` (ETA: ${etaText})` : '';
@@ -191,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ));
 
     const status = hospital ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT';
-    return res.status(200).json({ success: true, status, preAssignedHospitalId: hospital?.id ?? null, etaText, etaSeconds });
+    return res.status(200).json({ success: true, status, preAssignedHospitalId: hospital?.id ?? null, etaText });
   } catch (err: any) {
     console.error('submit-acv error:', err);
     return res.status(500).json({ success: false, error: err.message });

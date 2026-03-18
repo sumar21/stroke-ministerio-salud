@@ -105,59 +105,6 @@ console.log('[SMTP] config (no password):', { ...smtpConfig, auth: { user: smtpC
 const transporter = nodemailer.createTransport(smtpConfig);
 transporter.verify().then(() => console.log('[SMTP] verify OK')).catch((err: any) => console.error('[SMTP] verify FAILED:', err.message, err.code, err.response));
 
-// Haversine formula
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-async function getClosestHospitalByETA(patientLat: number, patientLng: number, hospitals: any[]) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return getClosestHospitalByHaversine(patientLat, patientLng, hospitals);
-
-  const origins = `${patientLat},${patientLng}`;
-  const destinations = hospitals.map(h => `${h.location.lat},${h.location.lng}`).join('|');
-
-  try {
-    const response = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origins}&destinations=${destinations}&key=${apiKey}`);
-    const data = await response.json();
-    if (data.status === 'OK' && data.rows[0].elements) {
-      const elements = data.rows[0].elements;
-      let minDuration = Infinity;
-      let closestIndex = -1;
-      elements.forEach((element: any, index: number) => {
-        if (element.status === 'OK' && element.duration.value < minDuration) {
-          minDuration = element.duration.value;
-          closestIndex = index;
-        }
-      });
-      if (closestIndex !== -1) {
-        return { hospital: hospitals[closestIndex], etaText: elements[closestIndex].duration.text, etaSeconds: elements[closestIndex].duration.value };
-      }
-    }
-  } catch (error) {
-    console.error("Error fetching Distance Matrix:", error);
-  }
-  return getClosestHospitalByHaversine(patientLat, patientLng, hospitals);
-}
-
-function getClosestHospitalByHaversine(patientLat: number, patientLng: number, hospitals: any[]) {
-  let closestHospital = null;
-  let minDistance = Infinity;
-  for (const hospital of hospitals) {
-    const distance = calculateDistance(patientLat, patientLng, hospital.location.lat, hospital.location.lng);
-    if (distance < minDistance) { minDistance = distance; closestHospital = hospital; }
-  }
-  return { hospital: closestHospital, etaText: null, etaSeconds: null };
-}
-
 
 const NOTIFICATION_RECIPIENTS = [
   { role: 'DINESA', email: 'harry.yang@sumardigital.com.ar', cc: 'santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar' },
@@ -333,10 +280,10 @@ app.post('/api/maps', async (req, res) => {
 
 app.post("/api/submit-acv", async (req, res) => {
   const patientData = req.body;
-  const strokeCenters = mockHospitals.filter(h => h.isStrokeCenter);
-  const { hospital: closestHospital, etaText, etaSeconds } = await getClosestHospitalByETA(patientData.location.lat, patientData.location.lng, strokeCenters);
-  const preAssignedHospital = closestHospital ? closestHospital.name : "Hospital Stroke Center (Default)";
-  const preAssignedHospitalId = closestHospital ? closestHospital.id : null;
+  const preAssignedHospitalId: string | null = patientData.preAssignedHospitalId ?? null;
+  const etaText: string | null = patientData.etaText ?? null;
+  const closestHospital = preAssignedHospitalId ? mockHospitals.find(h => h.id === preAssignedHospitalId) ?? null : null;
+  const preAssignedHospital = closestHospital ? closestHospital.name : 'A confirmar por DINESA';
   const etaDisplay = etaText ? ` (ETA: ${etaText})` : '';
 
   const emailContent = `
@@ -364,7 +311,7 @@ app.post("/api/submit-acv", async (req, res) => {
   }).then(info => console.log(`[submit-acv] sendMail OK — messageId: ${info.messageId}, response: ${info.response}, accepted: ${JSON.stringify(info.accepted)}, rejected: ${JSON.stringify(info.rejected)}`))
     .catch((err: any) => console.error('[submit-acv] sendMail FAILED:', err.message, err.code, err.response));
 
-  res.json({ success: true, status: preAssignedHospitalId ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT', preAssignedHospitalId, etaText, etaSeconds });
+  res.json({ success: true, status: preAssignedHospitalId ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT', preAssignedHospitalId, etaText });
 });
 
 app.post('/api/confirm-hospital', async (req, res) => {

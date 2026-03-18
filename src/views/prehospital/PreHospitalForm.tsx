@@ -360,18 +360,17 @@ export function PreHospitalForm({ onSubmit, onCancel }: PreHospitalFormProps) {
         onSubmit(formData, 'SAVED');
         return;
       }
+      const resolvedHospitalId = nearestHospital?.id ?? null;
+      const resolvedEtaText = nearestRoute
+        ? `${Math.max(1, Math.round(nearestRoute.totalDurationSeconds / 60))} min`
+        : null;
       const response = await fetch('/api/submit-acv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, preAssignedHospitalId: resolvedHospitalId, etaText: resolvedEtaText }),
       });
       if (!response.ok) throw new Error('Error al enviar el código ACV');
-      const result = await response.json();
-      const resolvedHospitalId = nearestHospital?.id ?? result.preAssignedHospitalId;
-      const resolvedEtaText = nearestRoute
-        ? `${Math.max(1, Math.round(nearestRoute.totalDurationSeconds / 60))} min`
-        : result.etaText ?? null;
-      onSubmit(formData, result.status, resolvedHospitalId, resolvedEtaText);
+      onSubmit(formData, resolvedHospitalId ? 'PRE_ASSIGNED' : 'PENDING_ASSIGNMENT', resolvedHospitalId ?? undefined, resolvedEtaText ?? undefined);
     } catch (error) {
       console.error(error);
       alert('Error al enviar el código ACV');
