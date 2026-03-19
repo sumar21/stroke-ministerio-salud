@@ -16,13 +16,12 @@ const hospitals: Hospital[] = [
 const BCC_LIST = 'harry.yang@sumardigital.com.ar,santiago.bianucci@sumardigital.com.ar,rodrigo.rizzo@sumardigital.com.ar';
 
 function getDistributionList(assignedHospital?: Hospital | null) {
-  const to: string[] = ['cvillagran@msal.gov.ar']; // Centro Coordinador Nacional (DINESA)
-  if (assignedHospital) {
-    if (assignedHospital.isStrokeCenter) {
-      to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
-    } else {
-      to.push('lgaggino@msal.gov.ar'); // Centro Operativo Local
-    }
+  const to: string[] = [
+    'cvillagran@msal.gov.ar',   // Centro Coordinador Nacional (DINESA)
+    'lgaggino@msal.gov.ar',     // Centro Operativo Local
+  ];
+  if (assignedHospital?.isStrokeCenter) {
+    to.push('dmasaragian@msal.gov.ar'); // Centro Stroke
   }
   return { to: to.join(','), bcc: BCC_LIST };
 }

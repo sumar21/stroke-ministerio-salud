@@ -115,7 +115,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
           className="text-center mt-4"
         >
           <p className="text-xs text-slate-400 font-medium">Dirección Nacional de Emergencias Sanitarias (DINESA)</p>
-          <p className="text-[10px] text-slate-300 mt-1 font-mono tracking-wide">v20260318.1.0.0 DEMO</p>
+          <p className="text-[10px] text-slate-300 mt-1 font-mono tracking-wide">v20260319.1.0.1 DEMO</p>
         </motion.div>
       </motion.div>
     </div>
